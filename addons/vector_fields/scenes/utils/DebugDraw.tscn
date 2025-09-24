@@ -1,0 +1,15 @@
+[gd_scene load_steps=4 format=3 uid="uid://d2sgd1onnwxv0"]
+
+[ext_resource type="Script" uid="uid://c8enulbrwcnrv" path="res://addons/vector_fields/scripts/utils/DebugDraw.gd" id="1_rkpk8"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hpk5r"]
+vertex_color_use_as_albedo = true
+
+[sub_resource type="ImmediateMesh" id="ImmediateMesh_rkpk8"]
+
+[node name="DebugDraw" type="Node"]
+script = ExtResource("1_rkpk8")
+
+[node name="DebugMesh" type="MeshInstance3D" parent="."]
+material_override = SubResource("StandardMaterial3D_hpk5r")
+mesh = SubResource("ImmediateMesh_rkpk8")
