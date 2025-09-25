@@ -1,0 +1,36 @@
+[gd_scene load_steps=3 format=3 uid="uid://cxqo53sqlgae"]
+
+[ext_resource type="Script" uid="uid://y73g5fla2gpe" path="res://addons/vector_fields/scripts/classes/VectorField3D.gd" id="1_3cywp"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_3cywp"]
+
+[node name="VectorField3D" type="Node3D"]
+script = ExtResource("1_3cywp")
+LOD = 2
+debug_update_time = 0.1
+metadata/_custom_type_script = "uid://y73g5fla2gpe"
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.5, 0.5)
+visible = false
+mesh = SubResource("BoxMesh_3cywp")
+
+[node name="MeshInstance3D2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 1.5, 1.5)
+visible = false
+mesh = SubResource("BoxMesh_3cywp")
+
+[node name="MeshInstance3D3" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 2.5, 2.5)
+visible = false
+mesh = SubResource("BoxMesh_3cywp")
+
+[node name="MeshInstance3D4" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5, 3.5, 3.5)
+visible = false
+mesh = SubResource("BoxMesh_3cywp")
+
+[node name="MeshInstance3D5" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.5, 4.5, 4.5)
+visible = false
+mesh = SubResource("BoxMesh_3cywp")
