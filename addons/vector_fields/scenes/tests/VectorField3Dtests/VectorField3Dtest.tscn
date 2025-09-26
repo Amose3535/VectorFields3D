@@ -1,7 +1,0 @@
-[gd_scene load_steps=2 format=3 uid="uid://cyiky7lalihag"]
-
-[ext_resource type="Script" uid="uid://y73g5fla2gpe" path="res://addons/vector_fields/scripts/classes/VectorField3D.gd" id="1_uy44b"]
-
-[node name="VectorField3Dtest" type="Node3D"]
-script = ExtResource("1_uy44b")
-metadata/_custom_type_script = "uid://y73g5fla2gpe"
