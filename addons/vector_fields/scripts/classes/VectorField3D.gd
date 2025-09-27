@@ -25,8 +25,9 @@ signal vf3d_vector_field_size_updated(vf3d: VectorField3D, new_vf_size: Vector3i
 		# Set every internal variable accordingly
 		LOD = new_lod
 		_recalculate_parameters(new_lod, vector_field_size)
-		_redraw_mesh()
 		emit_signal("vf3d_lod_updated",new_lod)
+		if Engine.is_editor_hint():
+			_redraw_mesh()
 
 ## vector_field_size is the amount of LOD cubes each side of your VectorField3D has.[br]Example: if LOD = l and vector_field_size = (x,y,z) means i'll have a parallelepiped of dimensions (x,y,z)*(1/l) meters.
 @export var vector_field_size : Vector3i = Vector3i(1,1,1):
@@ -39,14 +40,9 @@ signal vf3d_vector_field_size_updated(vf3d: VectorField3D, new_vf_size: Vector3i
 			vector_field_size = new_field_size
 		# AFTER validating the new_field_size, set every internal variable
 		_recalculate_parameters(LOD, new_field_size)
-		_redraw_mesh()
 		emit_signal("vf3d_vector_field_size_updated",new_field_size)
-
-## How often (in seconds) should the vector field update its vectors.
-@export var update_interval : float = 0.1:
-	set(new_interval):
-		update_interval = new_interval
-		emit_signal("vf3d_update_interval_updated",new_interval)
+		if Engine.is_editor_hint():
+			_redraw_mesh()
 
 ## Toggles future updates
 @export var active : bool = true:
@@ -62,17 +58,26 @@ signal vf3d_vector_field_size_updated(vf3d: VectorField3D, new_vf_size: Vector3i
 @export var draw_debug_lines : bool = true:
 	set(new_draw_state):
 		draw_debug_lines = new_draw_state
-		_redraw_mesh(new_draw_state)
+		if Engine.is_editor_hint():
+			_redraw_mesh()
 
 @export var draw_vectors_only : bool = false:
 	set(new_vec_draw_state):
 		draw_vectors_only = new_vec_draw_state
-		_redraw_mesh(draw_debug_lines,new_vec_draw_state)
+		if Engine.is_editor_hint():
+			_redraw_mesh(draw_debug_lines,new_vec_draw_state)
+
+@export var bounding_box_color : Color = Color.WEB_MAROON:
+	set(new_color):
+		bounding_box_color = new_color
+		if Engine.is_editor_hint():
+			_redraw_mesh()
 #endregion
 
 
 
 #region INTERNALS
+const FIELDS_GROUP : StringName = &"VectorFields3D"
 ## Corresponds to the length of the edge of a cube from the VectorField3D.[br]It's directly influenced by the LOD.
 var cube_edge : float = 1/LOD
 ## The data structure containing the vector data in local position for each cell.[br]By default, without any emitter interference, should be an n-dimensional matrix containing Vector3.ZERO's
@@ -87,21 +92,26 @@ var debug_mesh : MeshInstance3D = MeshInstance3D.new()
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
+	# Generic logic --------------------------------------------------------------------------------
 	# Add the current VectorField3D into a custom group
-	if !is_in_group("VectorFields3D"):
-		self.add_to_group("VectorFields3D")
+	if !is_in_group(FIELDS_GROUP):
+		self.add_to_group(FIELDS_GROUP)
 		emit_signal("vf3d_entered_group") # Emit specific signal
-		
 		#print("Added %s to group VectorFields3D!"%self)
-	# Editor logic ---------------------------------------------------------------------------
+	
+	_clear_debug_mesh()                             # Clear all possible debug meshes
+	_instantiate_debug_mesh()                       # Instantiate a new debug mesh
+	_recalculate_parameters(LOD, vector_field_size) # Recalculate parameters
+	_draw_debug_lines()                             # Draw initial state of VectorField3D
+	
+	# Editor logic ---------------------------------------------------------------------------------
 	if Engine.is_editor_hint():
-		_clear_debug_mesh()                             # Clear all possible debug meshes
-		_instantiate_debug_mesh()                       # Instantiate a new debug mesh
-		_recalculate_parameters(LOD, vector_field_size) # Recalculate parameters
-		_draw_debug_lines()                             # Draw initial state of VectorField3D
+		# Insert Editor logic here
 		return
-	# Runtime logic --------------------------------------------------------------------------
-	_clear_debug_mesh()
+	
+	# Runtime logic --------------------------------------------------------------------------------
+	# Insert Runtime logic here
+	pass
 
 # Called every physics frame. 'delta' is the elapsed time since the previous frame.
 func _physics_process(delta: float) -> void:
@@ -131,13 +141,6 @@ func _recalculate_parameters(new_lod=LOD, new_vector_field_size=vector_field_siz
 	# La funzione _update_field_size() non è più strettamente necessaria se usi il metodo di disegno con ImmediateMesh
 	# dal momento che la scala è gestita internamente dal disegno.
 	# _update_field_size()
-
-
-## The function responsible for resizing and updating the grid and its cells (reaction to resizing).[br]NOTE: This affects ONLY the grid in the editor since the global position of each cell is computed at runtime and not accessed as an actual physical objecy/region of space.
-func _update_field_size():
-	# Ho rimosso questa funzione, in quanto il disegno nell'editor
-	# si basa sulla ricreazione delle linee, non sulla scalatura del nodo.
-	pass
 
 
 ## The function responsible for reformatting the vector_data variable in order to handle the different sizes
@@ -176,6 +179,44 @@ func _initialize_vector_data(_vector_field_size = vector_field_size):
 	# Optional: Verification print (OK)
 	#print("3D Grid initialized. Dimensions: %d x %d x %d. Total elements: %d."%[dim_x, dim_y, dim_z, dim_x*dim_y*dim_z])
 	#print(vector_data)
+
+
+## The function responsible for computing the contribution of each compatible emitter to the vector grid.
+func _compute_field_vectors() -> void:
+	# Get all emitters from the emitter group
+	var all_emitters := get_tree().get_nodes_in_group(VectorFieldBaseEmitter3D.EMITTER_GROUP)
+	# Compute VectorField3D s AABB
+	var field_size_half = world_size / 2.0
+	# VectorField's center
+	var field_global_center = global_transform.origin 
+	# VectorField's AABB in World Space
+	var field_aabb = AABB(field_global_center - field_size_half, world_size)
+	for emitter in all_emitters:
+		var OK : bool = true
+		# If the node isn't of type or inherited type 'VectorFieldBaseEmitter3D', skip
+		if !emitter is VectorFieldBaseEmitter3D:
+			OK = false
+		# If the layers don't match, skip
+		if emitter.interaction_layer != self.interaction_layer:
+			OK = false
+		# Create emitter's AABB with the data at our disposal
+		var emitter_radius = emitter.max_distance
+		var emitter_aabb = AABB(
+			emitter.global_position - Vector3.ONE * emitter_radius, 
+			Vector3.ONE * emitter_radius * 2.0
+		)
+		# If the emitter's AABB and the Field's AABB don't touch nor intersect, skip
+		if !field_aabb.intersects(emitter_aabb):
+			OK = false
+		
+		if OK:
+			# Compute the emitter's contribution to the field
+			for x in range(vector_field_size.x):
+				for y in range(vector_field_size.y):
+					for z in range(vector_field_size.z):
+						var cell_center : Vector3
+						(emitter as VectorFieldBaseEmitter3D).get_vector_at_position(cell_center)
+		
 #endregion
 
 
@@ -255,7 +296,7 @@ func _draw_debug_lines(vectors_only : bool = false) -> void:
 	(debug_mesh.mesh as ImmediateMesh).surface_end()
 
 ## Helper per disegnare la scatola che delimita il campo
-func _draw_bounding_box(offset: Vector3, bounding_color : Color = Color.WEB_MAROON):
+func _draw_bounding_box(offset: Vector3, bounding_color : Color = bounding_box_color):
 	var size = world_size
 	var zff : float = 0.001*3 # z-fighting fixer
 	var points = [

@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3 uid="uid://dsqf7mp8psj4q"]
+
+[ext_resource type="Script" uid="uid://bg2mrl7hbkop0" path="res://addons/vector_fields/scripts/classes/VectorFieldBaseEmitter3D.gd" id="1_srms3"]
+
+[node name="VectorFieldBaseEmitter3dTest" type="Node3D"]
+script = ExtResource("1_srms3")
+metadata/_custom_type_script = "uid://bg2mrl7hbkop0"

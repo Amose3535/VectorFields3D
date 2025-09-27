@@ -4,7 +4,6 @@
 
 [node name="Node3D" type="Node3D"]
 script = ExtResource("1_3cywp")
-LOD = 5
+LOD = 3
 vector_field_size = Vector3i(10, 10, 10)
-draw_vectors_only = true
 metadata/_custom_type_script = "uid://y73g5fla2gpe"
