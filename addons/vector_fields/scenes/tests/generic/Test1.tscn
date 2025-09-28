@@ -1,23 +1,36 @@
-[gd_scene load_steps=3 format=3 uid="uid://bpmlyy0s7d0t6"]
+[gd_scene load_steps=4 format=3 uid="uid://bpmlyy0s7d0t6"]
 
 [ext_resource type="Script" uid="uid://x6yb1pv8gjby" path="res://addons/vector_fields/scripts/classes/custom_emitters/box_emitter.gd" id="2_an1ts"]
 [ext_resource type="Script" uid="uid://y73g5fla2gpe" path="res://addons/vector_fields/scripts/classes/VectorField3D.gd" id="2_oh6qd"]
 
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_an1ts"]
+radius = 0.4
+
 [node name="Test1" type="Node3D"]
 
 [node name="VectorField3D" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.02666, 0.478444, 0)
 script = ExtResource("2_oh6qd")
-LOD = 5
-vector_field_size = Vector3i(25, 25, 25)
-draw_vectors_only = true
+LOD = 2
+vector_field_size = Vector3i(10, 7, 10)
+grid_color = Color(1, 0.52549, 1, 0.109804)
+vector_color = Color(0, 1, 0, 1)
 metadata/_custom_type_script = "uid://y73g5fla2gpe"
 
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(0.982094, 0.093863, -0.163345, 0, 0.867045, 0.49823, 0.188393, -0.489309, 0.851519, -1.12814, 3.19212, 6.9439)
 
 [node name="VectorFieldBoxEmitter3D" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.661677, 0.482134, -0.110731)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.39265, 0.855363, -0.518603)
 script = ExtResource("2_an1ts")
-target_vector = Vector3(-5.03, 1, 1)
-max_distance = 1.405
+target_vector = Vector3(1, 1, 1)
 metadata/_custom_type_script = "uid://x6yb1pv8gjby"
+
+[node name="VectorFieldBoxEmitter3D2" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.48803, 0.855363, -0.518603)
+script = ExtResource("2_an1ts")
+target_vector = Vector3(-1, -1, -1)
+metadata/_custom_type_script = "uid://x6yb1pv8gjby"
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("CapsuleMesh_an1ts")

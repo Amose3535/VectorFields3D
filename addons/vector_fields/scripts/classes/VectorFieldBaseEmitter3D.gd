@@ -72,6 +72,11 @@ func _notification(what: int) -> void:
 		NOTIFICATION_TRANSFORM_CHANGED:
 			notify_fields_of_update()
 
+func _enter_tree() -> void:
+	notify_fields_of_update()
+
+func _exit_tree() -> void:
+	notify_fields_of_update()
 
 
 #region INTERNAL FUNCTIONS
@@ -82,9 +87,7 @@ func _recalculate_parameters(new_max_distance : float = max_distance) -> void:
 ## This is the function used to compute the vector contribution for a given point in space. It spits out the vector contribution as a Vector3 in magnitude form (basically local coordinates).
 func get_vector_at_position(vector_pos : Vector3) -> Vector3:
 	# Insert behavior in child class
-	return Vector3.ONE
-
-# VectorFieldBaseEmitter3D.gd
+	return Vector3.ZERO
 
 ## Public Function to tell the fields an update occurred
 func notify_fields_of_update() -> void:
@@ -132,6 +135,7 @@ func _instantiate_debug_mesh() -> void:
 	
 	# Create the material for the Mesh
 	var new_material = StandardMaterial3D.new()
+	new_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	new_material.vertex_color_use_as_albedo = true
 	debug_mesh.material_override = new_material
 

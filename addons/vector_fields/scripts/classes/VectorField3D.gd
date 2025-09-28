@@ -22,9 +22,11 @@ signal vf3d_updated(vf3d : VectorField3D)
 		# Set every internal variable accordingly
 		LOD = new_lod
 		_recalculate_parameters(new_lod, vector_field_size)
+		_compute_field_vectors()
 		emit_signal(&"vf3d_updated",new_lod)
 		if Engine.is_editor_hint():
-			_redraw_mesh()
+			_redraw_mesh(draw_debug_lines,draw_vectors_only)
+			
 
 ## vector_field_size is the amount of LOD cubes each side of your VectorField3D has.[br]Example: if LOD = l and vector_field_size = (x,y,z) means i'll have a parallelepiped of dimensions (x,y,z)*(1/l) meters.
 @export var vector_field_size : Vector3i = Vector3i(1,1,1):
@@ -37,9 +39,10 @@ signal vf3d_updated(vf3d : VectorField3D)
 			vector_field_size = new_field_size
 		# AFTER validating the new_field_size, set every internal variable
 		_recalculate_parameters(LOD, new_field_size)
+		_compute_field_vectors()
 		emit_signal(&"vf3d_updated",new_field_size)
 		if Engine.is_editor_hint():
-			_redraw_mesh()
+			_redraw_mesh(draw_debug_lines,draw_vectors_only)
 
 ## Toggles future updates
 @export var active : bool = true:
@@ -69,6 +72,18 @@ signal vf3d_updated(vf3d : VectorField3D)
 		bounding_box_color = new_color
 		if Engine.is_editor_hint():
 			_redraw_mesh()
+
+@export var grid_color : Color = Color.DARK_GRAY:
+	set(new_color):
+		grid_color = new_color
+		if Engine.is_editor_hint():
+			_redraw_mesh()
+
+@export var vector_color : Color = Color.YELLOW:
+	set(new_color):
+		vector_color = new_color
+		if Engine.is_editor_hint():
+			_redraw_mesh()
 #endregion
 
 
@@ -84,10 +99,6 @@ var vector_data : Array = []
 var world_size : Vector3 = Vector3(vector_field_size)*cube_edge
 ## The mesh that is responsible for drawing debug lines
 var debug_mesh : MeshInstance3D = MeshInstance3D.new()
-## Cache to track the previous global position of each emitter to detect movement.
-var _emitter_positions_cache: Dictionary = {}
-## Cache to track non-positional properties (like max_distance) if needed.
-var _emitter_properties_cache: Dictionary = {} # Optional: For future complex change detection
 #endregion
 
 
@@ -100,6 +111,9 @@ func _ready() -> void:
 		self.add_to_group(FIELDS_GROUP)
 		emit_signal(&"vf3d_entered_group",self)
 	
+	# Requests notifications on transform change
+	set_notify_transform(true)
+	
 	_clear_debug_mesh()
 	_instantiate_debug_mesh()
 	_recalculate_parameters(LOD, vector_field_size)
@@ -108,12 +122,18 @@ func _ready() -> void:
 	if Engine.is_editor_hint():
 		# In editor, use call_deferred to give enough time to the Emitters to have their _ready() and call call_group.
 		call_deferred("_compute_field_vectors")
+		call_deferred("_draw_debug_lines",draw_vectors_only)
 		return
 	
 	# Runtime logic
 	_compute_field_vectors() # A runtime, è sicuro calcolare subito.
 	_draw_debug_lines(draw_vectors_only)
 
+
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_TRANSFORM_CHANGED:
+			receive_emitter_update(VectorFieldBaseEmitter3D.new())
 
 # Called when the node is about to get deleted from tree
 func _exit_tree() -> void:
@@ -151,6 +171,9 @@ func _initialize_vector_data(_vector_field_size : Vector3i = vector_field_size):
 
 ## The function responsible for computing the contribution of each compatible emitter to the vector grid.
 func _compute_field_vectors() -> void:
+	if !active:
+		return
+	
 	# Initialize all vectors to zero
 	_initialize_vector_data()
 	
@@ -196,44 +219,17 @@ func _compute_field_vectors() -> void:
 
 ## This function gets called through get_tree().call_group(...)
 func receive_emitter_update(emitter: VectorFieldBaseEmitter3D) -> void:
-	print("[Field] Recieved update from Emitter!")
-	
-	# 1. Check if the emitter is new OR if a property (like max_distance) has changed.
-	var is_new_emitter = not _emitter_positions_cache.has(emitter)
-	
-	# For simplicity, if the max_distance changed, we force a full recalculation
-	var current_distance = emitter.max_distance
-	var cached_distance = _emitter_properties_cache.get(emitter, -1.0)
-	var is_property_change = not is_new_emitter and not is_equal_approx(current_distance, cached_distance)
-	
-	if is_new_emitter or is_property_change:
-		print("[Field] Full recalculation triggered.")
-		# Full Recalculation (expensive, but necessary for structure/property change)
-		_compute_field_vectors()
-		_emitter_positions_cache[emitter] = emitter.global_position
-		_emitter_properties_cache[emitter] = current_distance
+	# Controlli di validità
+	if not is_instance_valid(self) or not is_instance_valid(emitter):
+		return
 		
-	else:
-		# 2. Localized Update (Movement Check)
-		var old_pos: Vector3 = _emitter_positions_cache.get(emitter, emitter.global_position) # Usa default per sicurezza
-		var new_pos: Vector3 = emitter.global_position
-		var r = emitter.max_distance
+	print("[Field] Ricevuto aggiornamento da Emitter! -> FORZATURA RICALCOLO COMPLETO")
 		
-		# If the position is the same, do nothing.
-		if not old_pos.is_equal_approx(new_pos):
-			print("[Field] Localized recalculation triggered.")
-			
-			# Calculate the Update AABB (Merged Old Zone + New Zone)
-			var old_aabb = AABB(old_pos - Vector3.ONE * r, Vector3.ONE * r * 2.0)
-			var new_aabb = AABB(new_pos - Vector3.ONE * r, Vector3.ONE * r * 2.0)
-			var update_aabb = old_aabb.merge(new_aabb)
-			
-			_recalculate_vectors_in_zone(update_aabb)
-			
-			# Update cache for next time
-			_emitter_positions_cache[emitter] = new_pos
+	# 1. Complete recomputation of vectors
+	_compute_field_vectors()
 	
-	# The debug mesh should be redrawn after any change
+	
+	# 3. Update the debug mesh
 	if Engine.is_editor_hint():
 		_redraw_mesh(draw_debug_lines, draw_vectors_only)
 
@@ -335,6 +331,7 @@ func _instantiate_debug_mesh() -> void:
 	
 	# Create the material for the Mesh
 	var new_material = StandardMaterial3D.new()
+	new_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	new_material.vertex_color_use_as_albedo = true
 	debug_mesh.material_override = new_material
 
@@ -362,13 +359,13 @@ func _draw_debug_lines(vectors_only : bool = false) -> void:
 				
 				# Draw grid (optional)
 				if !vectors_only:
-					add_line(cell_pos_local, cell_pos_local + Vector3(cube_edge, 0, 0), Color.DARK_GRAY)
-					add_line(cell_pos_local, cell_pos_local + Vector3(0, cube_edge, 0), Color.DARK_GRAY)
-					add_line(cell_pos_local, cell_pos_local + Vector3(0, 0, cube_edge), Color.DARK_GRAY)
+					add_line(cell_pos_local, cell_pos_local + Vector3(cube_edge, 0, 0), grid_color)
+					add_line(cell_pos_local, cell_pos_local + Vector3(0, cube_edge, 0), grid_color)
+					add_line(cell_pos_local, cell_pos_local + Vector3(0, 0, cube_edge), grid_color)
 				
 				# Draw the vector only if  not null
 				if not vector_force.is_zero_approx():
-					add_line_relative(cell_pos_local + (Vector3.ONE * cube_edge) / 2.0, (vector_force.normalized() * cube_edge) / 2.0, Color.YELLOW)
+					add_line_relative(cell_pos_local + (Vector3.ONE * cube_edge) / 2.0, (vector_force.normalized() * cube_edge) / 2.0, vector_color)
 					nonzero_vector_flag = true
 	# If no vertices were added, add one single vertex to the center of the VectorField3D to prevent error spamming in the console.
 	if !nonzero_vector_flag:
