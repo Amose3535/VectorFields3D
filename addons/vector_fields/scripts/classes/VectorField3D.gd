@@ -16,8 +16,8 @@ signal vf3d_updated(vf3d : VectorField3D)
 
 
 #region EXPORTS
-## LOD (or level of detail) is used to compute the size of the building blocks of for VectorField3D using the formula `cube_size_side = 1/LOD`.[br]By default the minimum LOD available is 1 (hence the maximum cube size is 1*1*1  meters).
-@export_range(1.0, 10000, 1.0, "or_greater") var LOD : int = 1:
+## LOD (or level of detail) is used to compute the size of the building blocks of for VectorField3D using the formula `cube_size_side = 1/LOD`.[br]By default the minimum LOD available is 1 (hence the maximum cube size is 1*1*1  meters).
+@export_range(0.1, 100, 0.1, "or_greater") var LOD : float = 1:
 	set(new_lod):
 		# Set every internal variable accordingly
 		LOD = new_lod
@@ -50,7 +50,7 @@ signal vf3d_updated(vf3d : VectorField3D)
 		active = new_activity
 		emit_signal(&"vf3d_updated",new_activity)
 
-## InteractionLayer is the layer that defines the interaction between emitters and fields. Only emitters on the same laer as another field will be able to affect its vectors. 
+## InteractionLayer is the layer that defines the interaction between emitters and fields. Only emitters on the same laer as another field will be able to affect its vectors. 
 @export_flags_3d_physics var interaction_layer = 1
 
 @export_group("Debugging")
@@ -148,7 +148,7 @@ func _recalculate_parameters(new_lod=LOD, new_vector_field_size=vector_field_siz
 
 ## The function responsible for reformatting the vector_data variable in order to handle the different sizes
 func _initialize_vector_data(_vector_field_size : Vector3i = vector_field_size):
-	# 1. Caching the dimensions to prevent mid-run changes 
+	# 1. Caching the dimensions to prevent mid-run changes 
 	var cached_size: Vector3i = vector_field_size
 	
 	# Clear the vector_data to ensure a fresh start
@@ -184,7 +184,7 @@ func _compute_field_vectors() -> void:
 	# Compute VectorField3D s AABB
 	var field_size_half = world_size / 2.0
 	# VectorField's center
-	var field_global_center = global_transform.origin 
+	var field_global_center = global_transform.origin
 	# VectorField's AABB in World Space
 	var field_aabb = AABB(field_global_center - field_size_half, world_size)
 	# Compute cell size and origin ONCE (for all emitters)
@@ -199,10 +199,11 @@ func _compute_field_vectors() -> void:
 		# If the layers don't match, skip
 		if (emitter.interaction_layer & self.interaction_layer) == 0: # Bit-wise and comparison
 			continue # No layer in common: skip to next iteration
-		# Create emitter's AABB with the data at our disposal
-		var emitter_radius = emitter.max_distance
-		var emitter_aabb = AABB(emitter.global_position - Vector3.ONE * emitter_radius, Vector3.ONE * emitter_radius * 2.0)
-		# If the emitter's AABB and the Field's AABB don't touch nor intersect, skip
+			
+		# 🛑 MODIFICA CRUCIALE: Usiamo la dimensione vettoriale (world_size) dell'emitter per l'AABB
+		var emitter_world_size: Vector3 = (emitter as VectorFieldBaseEmitter3D).world_size
+		var emitter_aabb = AABB(emitter.global_position - emitter_world_size / 2.0, emitter_world_size)
+		# Se l'AABB dell'emitter e l'AABB del Field non si intersecano, salta
 		if !field_aabb.intersects(emitter_aabb):
 			continue # They don't intersect, continue to next emitter
 		
@@ -269,8 +270,11 @@ func _recalculate_vectors_in_zone(zone_aabb: AABB) -> void:
 		# Use the same three-way filter (Type, Layer, Field AABB intersection)
 		if not emitter is VectorFieldBaseEmitter3D: continue
 		if (emitter.interaction_layer & self.interaction_layer) == 0: continue
-		var r = (emitter as VectorFieldBaseEmitter3D).max_distance
-		var emitter_aabb = AABB(emitter.global_position - Vector3.ONE * r, Vector3.ONE * r * 2.0)
+		
+		# 🛑 MODIFICA CRUCIALE: Usiamo la dimensione vettoriale (world_size) dell'emitter per l'AABB
+		var emitter_world_size: Vector3 = (emitter as VectorFieldBaseEmitter3D).world_size
+		var emitter_aabb = AABB(emitter.global_position - emitter_world_size / 2.0, emitter_world_size)
+		
 		if not field_aabb.intersects(emitter_aabb): continue
 		
 		relevant_emitters.append(emitter)
@@ -293,11 +297,10 @@ func _recalculate_vectors_in_zone(zone_aabb: AABB) -> void:
 				
 				# Calculate contribution from ALL relevant emitters for this cell
 				for emitter in relevant_emitters:
-					var r_sq = (emitter as VectorFieldBaseEmitter3D).max_distance * (emitter as VectorFieldBaseEmitter3D).max_distance
-					
-					# Final distance check (Point in Sphere)
-					if emitter.global_position.distance_squared_to(cell_global_pos) <= r_sq:
-						net_vector += (emitter as VectorFieldBaseEmitter3D).get_vector_at_position(cell_global_pos)
+					# 🛑 RIMOZIONE LOGICA SFERICA
+					# Dato che l'AABB è già stato controllato, non facciamo un controllo sferico aggiuntivo,
+					# ma ci affidiamo alla logica AABB-based di get_vector_at_position (che farà il check AABB)
+					net_vector += (emitter as VectorFieldBaseEmitter3D).get_vector_at_position(cell_global_pos)
 						
 				vector_data[x][y][z] = net_vector
 
@@ -317,7 +320,7 @@ func get_vector_at_global_position(global_pos: Vector3) -> Vector3:
 		return Vector3.ZERO
 	
 	# 2. Map the global position to the Field's local coordinates:
-	# global_pos = global_transform*local_pos  >>>>>  local_pos = global_transform_inverse*local_pos
+	# global_pos = global_transform*local_pos  >>>>>  local_pos = global_transform_inverse*local_pos
 	var local_pos: Vector3 = global_transform.inverse() * global_pos
 	
 	# 3. Calculate the normalized position (ranging from 0 to 1)
@@ -337,8 +340,8 @@ func get_vector_at_global_position(global_pos: Vector3) -> Vector3:
 	var z: int = indices.z
 	
 	# Sanity check: since we already checked the AABB, this should always pass.
-	if (x >= 0 and x < vector_field_size.x and 
-		y >= 0 and y < vector_field_size.y and 
+	if (x >= 0 and x < vector_field_size.x and
+		y >= 0 and y < vector_field_size.y and
 		z >= 0 and z < vector_field_size.z):
 		
 		# Return the vector data from the cell
@@ -383,7 +386,7 @@ func _instantiate_debug_mesh() -> void:
 	new_material.vertex_color_use_as_albedo = true
 	debug_mesh.material_override = new_material
 
-## Draw grid  + debug vectors
+## Draw grid  + debug vectors
 func _draw_debug_lines(vectors_only : bool = false) -> void:
 	if not is_instance_valid(debug_mesh) or not (debug_mesh.mesh is ImmediateMesh):
 		return
@@ -411,7 +414,7 @@ func _draw_debug_lines(vectors_only : bool = false) -> void:
 					add_line(cell_pos_local, cell_pos_local + Vector3(0, cube_edge, 0), grid_color)
 					add_line(cell_pos_local, cell_pos_local + Vector3(0, 0, cube_edge), grid_color)
 				
-				# Draw the vector only if  not null
+				# Draw the vector only if  not null
 				if not vector_force.is_zero_approx():
 					add_line_relative(cell_pos_local + (Vector3.ONE * cube_edge) / 2.0, (vector_force.normalized() * cube_edge) / 2.0, vector_color)
 					nonzero_vector_flag = true
@@ -439,20 +442,20 @@ func _draw_bounding_box(offset: Vector3, bounding_color : Color = bounding_box_c
 	(debug_mesh.mesh as ImmediateMesh).surface_set_color(Color.WHITE)
 	
 	# Disegna gli spigoli della scatola
-	add_line(points[0], points[1], bounding_color)
-	add_line(points[1], points[2], bounding_color)
-	add_line(points[2], points[3], bounding_color)
-	add_line(points[3], points[0], bounding_color)
+	add_line(points[0], points[1], bounding_box_color)
+	add_line(points[1], points[2], bounding_box_color)
+	add_line(points[2], points[3], bounding_box_color)
+	add_line(points[3], points[0], bounding_box_color)
 	
-	add_line(points[4], points[5], bounding_color)
-	add_line(points[5], points[6], bounding_color)
-	add_line(points[6], points[7], bounding_color)
-	add_line(points[7], points[4], bounding_color)
+	add_line(points[4], points[5], bounding_box_color)
+	add_line(points[5], points[6], bounding_box_color)
+	add_line(points[6], points[7], bounding_box_color)
+	add_line(points[7], points[4], bounding_box_color)
 	
-	add_line(points[0], points[4], bounding_color)
-	add_line(points[1], points[5], bounding_color)
-	add_line(points[2], points[6], bounding_color)
-	add_line(points[3], points[7], bounding_color)
+	add_line(points[0], points[4], bounding_box_color)
+	add_line(points[1], points[5], bounding_box_color)
+	add_line(points[2], points[6], bounding_box_color)
+	add_line(points[3], points[7], bounding_box_color)
 
 ## Adds a line to an open surface from a point in space "from" to a point in space "to" with a certain color "color"
 func add_line(from : Vector3, to : Vector3, color : Color = Color(1,1,1,1), force : bool = false):
@@ -474,7 +477,7 @@ func add_line_relative(from : Vector3, to_relative : Vector3, color : Color) -> 
 
 ## Adds a line to an open surface from a point in space "from" to a point in space "to" with a certain color "color"
 func draw_line(from : Vector3, to : Vector3, color : Color = Color(1,1,1,1)):
-	# Create a new surface on  which we can draw the line
+	# Create a new surface on  which we can draw the line
 	(debug_mesh.mesh as ImmediateMesh).surface_begin(Mesh.PRIMITIVE_LINES)
 	# Early return for points too close to eachother (comment the next line if you want to purposefully draw a point for whatever reason)
 	if from.is_equal_approx(to): return

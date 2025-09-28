@@ -24,19 +24,22 @@ class_name VectorFieldPointEmitter3D
 
 ## Override the inherited function to define the point source behavior.
 func get_vector_at_position(vector_pos : Vector3) -> Vector3:
+	
+	# NEW: Use the emitter's world_size to define the bounds (AABB check)
+	var half_size = world_size / 2.0
+	var emitter_aabb = AABB(global_position - half_size, world_size)
+	if not emitter_aabb.has_point(vector_pos):
+		return Vector3.ZERO
+		
 	# 1. Calculate the vector from the Emitter's center to the point being sampled
 	var direction: Vector3 = vector_pos - global_position
 	
-	# 2. Get the distance (r) and the squared distance (r^2)
+	# 2. Get the distance (r) and the squared distance (r^2) for magnitude calculation
 	var dist_sq: float = direction.length_squared()
 	var dist: float = sqrt(dist_sq)
 	
 	# Safety check: Avoid division by zero if the point is exactly at the emitter's center.
 	if dist_sq < 0.0001: 
-		return Vector3.ZERO
-		
-	# Check if the point is outside the effective range (using base class max_distance)
-	if dist > max_distance:
 		return Vector3.ZERO
 		
 	# 3. Calculate the force magnitude based on decay type
@@ -50,15 +53,11 @@ func get_vector_at_position(vector_pos : Vector3) -> Vector3:
 		magnitude = power / dist
 		
 	# 4. Combine direction and magnitude
-	# If power > 0, magnitude is positive -> ATTRACTION (force acts towards the emitter's center)
-	# If power < 0, magnitude is negative -> REPULSION (force acts away from the emitter's center)
+	var final_vector = direction.normalized() * magnitude
 	
-	# We normalize 'direction' and then multiply by the calculated 'magnitude'.
-	# Note: If power > 0 (attraction), the force direction is INVERTED: -(direction.normalized())
-	# The magnitude is adjusted by the sign of 'power' to manage attraction/repulsion.
-	
-	# For a point source, we want the force to act ALONG the direction vector.
-	# The sign of 'power' will manage attraction/repulsion.
-	
-	# Final Force = (Normalized Direction) * Magnitude
-	return direction.normalized() * magnitude
+	# Apply the minimum magnitude threshold filter.
+	# We use length_squared() vs min_magnitude * min_magnitude for performance.
+	if final_vector.length_squared() < min_magnitude * min_magnitude:
+		return Vector3.ZERO
+		
+	return final_vector

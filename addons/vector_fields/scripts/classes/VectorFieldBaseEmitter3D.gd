@@ -6,9 +6,8 @@ class_name VectorFieldBaseEmitter3D
 ##
 ## VectorFieldBaseEmitter3D isn't meant to be used on its own. It's to be considered like a virtual class.[br]
 ## When inheriting VectorFieldBaseEmitter3D, if you want to see updates to VectorField3D's in the editor, remember to add @tool to the top of the script.
-## VectorFieldBaseEmitter3D allows with its highly configurable API to  make your very own emitter with very specific properties.[br]
+## VectorFieldBaseEmitter3D allows with its highly configurable API to  make your very own emitter with very specific properties.[br]
 ## VectorFieldBaseEmitter3D should be abstract considering the implementation BUT since this is actively being developed in 4.4 AND it's made to be also backwards-compatible it currently isn't.[br]
-
 
 #region EXPORTS
 ## The interaction layer determines the fields which this emitter will interact with.
@@ -16,16 +15,25 @@ class_name VectorFieldBaseEmitter3D
 	set(new_interaction_layer):
 		interaction_layer=new_interaction_layer
 		notify_fields_of_update()
-## The max distance is a radial distance used by the vector fields for optimization purposes: Every field outisde the max_distance range won't even bother considering the contribution for this emitter.[br][br]For best results it's reccomended to use a max_distance >= a distance at which the vector are 0 or really close to it.
-@export var max_distance : float = 1:
-	set(new_distance):
-		max_distance = max(0.0,new_distance) # Stops distance from going in the negatives
-		_recalculate_parameters(max_distance)
+		
+## The maximum world size of the emitter's influence zone (the Bounding Box for force contribution).
+@export var max_size : Vector3 = Vector3.ONE * 2.0: # Default size for a 2x2x2 box
+	set(new_size):
+		max_size = new_size.abs() # Ensure no negative values
+		_recalculate_parameters(max_size)
 		notify_fields_of_update()
 		if Engine.is_editor_hint():
 			_redraw_mesh()
 
-@export_group("Debugging") 
+## The minimum magnitude a vector must have to be considered non-zero. [br]
+## Any vector with a magnitude below this value will be clamped to Vector3.ZERO.[br]
+## This allows the creation of a zero-force sphere/ellipsoid (dead zone) around the emitter.[br]
+@export var min_magnitude: float = 0.0:
+	set(new_magnitude):
+		min_magnitude = max(0.0, new_magnitude) # Ensures the value is not negative
+		notify_fields_of_update()
+
+@export_group("Debugging")
 @export var draw_debug_lines : bool = true:
 	set(new_draw_state):
 		draw_debug_lines = new_draw_state
@@ -33,6 +41,7 @@ class_name VectorFieldBaseEmitter3D
 			_redraw_mesh()
 @export var bounding_box_color : Color = Color.BLUE:
 	set(new_color):
+		bounding_box_color = new_color
 		if Engine.is_editor_hint():
 			_redraw_mesh()
 #endregion
@@ -41,8 +50,8 @@ class_name VectorFieldBaseEmitter3D
 ## The StringName of the group containing all emitters
 const EMITTER_GROUP : StringName = &"VectorFieldEmitters3D"
 ## The in-world size that this VectorFieldBaseEmitter3D occupies.
-var world_size : Vector3 = Vector3.ONE * max_distance * 2
-## The mesh that is responsible for drawing debug lines
+var world_size : Vector3 = max_size
+## The MeshInstance that is responsible for displaying the debug lines
 var debug_mesh : MeshInstance3D = MeshInstance3D.new()
 #endregion
 
@@ -56,7 +65,7 @@ func _ready() -> void:
 	
 	_clear_debug_mesh()                   # Clear all possible debug meshes
 	_instantiate_debug_mesh()             # Instantiate a new debug mesh
-	_recalculate_parameters(max_distance) # Recalculate parameters
+	_recalculate_parameters(max_size)     # Recalculate parameters using max_size
 	_draw_debug_lines()                   # Draw initial state of VectorField3D
 	
 	if Engine.is_editor_hint():
@@ -81,8 +90,8 @@ func _exit_tree() -> void:
 
 #region INTERNAL FUNCTIONS
 ## The function that, when called is responsible for updating all parameters.
-func _recalculate_parameters(new_max_distance : float = max_distance) -> void:
-	world_size = Vector3.ONE * new_max_distance * 2
+func _recalculate_parameters(new_max_size : Vector3 = max_size) -> void:
+	world_size = new_max_size
 
 ## This is the function used to compute the vector contribution for a given point in space. It spits out the vector contribution as a Vector3 in magnitude form (basically local coordinates).
 func get_vector_at_position(vector_pos : Vector3) -> Vector3:
@@ -91,14 +100,17 @@ func get_vector_at_position(vector_pos : Vector3) -> Vector3:
 
 ## Public Function to tell the fields an update occurred
 func notify_fields_of_update() -> void:
+	# Get the group name from the other class (assuming VectorField3D is known via autoload or script)
+	const VF_GROUP = &"VectorFields3D" 
+	
 	if not is_inside_tree():
 		return
 	if Engine.is_editor_hint():
 		# Deferred mode call
-		get_tree().call_group_flags(SceneTree.GROUP_CALL_DEFERRED, VectorField3D.FIELDS_GROUP, &"receive_emitter_update", self)
+		get_tree().call_group_flags(SceneTree.GROUP_CALL_DEFERRED, VF_GROUP, &"receive_emitter_update", self)
 	else:
 		# Direct call
-		get_tree().call_group(VectorField3D.FIELDS_GROUP, &"receive_emitter_update", self)
+		get_tree().call_group(VF_GROUP, &"receive_emitter_update", self)
 #endregion
 
 
@@ -106,6 +118,8 @@ func notify_fields_of_update() -> void:
 
 ## function that first clears the old mesh and (if draw param is set to true) redraws the new one (handy when toggling draw state).
 func _redraw_mesh() -> void:
+	if !is_inside_tree():
+		return
 	# Clear old surfaces
 	if debug_mesh.mesh is ImmediateMesh:
 		(debug_mesh.mesh as ImmediateMesh).clear_surfaces()
@@ -211,7 +225,7 @@ func add_line_relative(from : Vector3, to_relative : Vector3, color : Color) -> 
 
 ## Adds a line to an open surface from a point in space "from" to a point in space "to" with a certain color "color"
 func draw_line(from : Vector3, to : Vector3, color : Color = Color(1,1,1,1)):
-	# Create a new surface on  which we can draw the line
+	# Create a new surface on  which we can draw the line
 	(debug_mesh.mesh as ImmediateMesh).surface_begin(Mesh.PRIMITIVE_LINES)
 	# Early return for points too close to eachother (comment the next line if you want to purposefully draw a point for whatever reason)
 	if from.is_equal_approx(to): return

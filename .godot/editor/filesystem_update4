@@ -1,3 +1,2 @@
 res://addons/vector_fields/scenes/tests/generic/Test1.tscn
-res://addons/vector_fields/scenes/tests/generic/Test3.tscn
-res://addons/vector_fields/scripts/classes/custom_emitters/vortex_emitter.gd
+res://addons/vector_fields/scripts/classes/VectorFieldBaseEmitter3D.gd

@@ -29,33 +29,32 @@ class_name VectorFieldVortexEmitter3D
 
 ## Override the inherited function to define the vortex behavior.
 func get_vector_at_position(vector_pos : Vector3) -> Vector3:
+	# NEW: Use the emitter's world_size to define the bounds (AABB check)
+	var half_size = world_size / 2.0
+	var emitter_aabb = AABB(global_position - half_size, world_size)
+	if not emitter_aabb.has_point(vector_pos):
+		return Vector3.ZERO
+	
 	# 1. Calculate the vector from the Emitter's center to the point being sampled
 	var direction: Vector3 = vector_pos - global_position
 	
 	# 2. Get the distance (r) and the squared distance (r^2)
 	var dist_sq: float = direction.length_squared()
 	var dist: float = sqrt(dist_sq)
-	
-	# Safety check: Avoid division by zero and check against max_distance
-	if dist_sq < 0.0001 or dist > max_distance: 
+	# Safety check: Avoid division by zero
+	if dist_sq < 0.0001: 
 		return Vector3.ZERO
-		
 	# 3. Calculate the tangential force direction
 	# We use the cross product (Vector A x Vector B) to find a vector perpendicular
-	# to both the direction (A) and the rotation axis (B). This is the TANGENTIAL direction.
+	# to both the direction (A) and the rotation axis (B).
 	var tangential_direction: Vector3 = rotation_axis.cross(direction).normalized()
-	
 	# 4. Calculate the force magnitude based on decay type
 	var magnitude: float = 0.0
-	
 	if inverse_square_decay:
 		# Inverse Square Law: 1 / r^2
-		# Note: We apply the strength directly here
 		magnitude = vortex_strength / dist_sq
 	else:
 		# Linear Decay: 1 / r
 		magnitude = vortex_strength / dist
-		
 	# 5. Combine tangential direction and magnitude
-	# The result is a vector perpendicular to the center, rotating around the axis.
 	return tangential_direction * magnitude
