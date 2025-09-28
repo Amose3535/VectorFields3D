@@ -1,34 +1,42 @@
-[gd_scene load_steps=4 format=3 uid="uid://bpmlyy0s7d0t6"]
+[gd_scene load_steps=6 format=3 uid="uid://bpmlyy0s7d0t6"]
 
 [ext_resource type="Script" uid="uid://x6yb1pv8gjby" path="res://addons/vector_fields/scripts/classes/custom_emitters/box_emitter.gd" id="2_an1ts"]
 [ext_resource type="Script" uid="uid://y73g5fla2gpe" path="res://addons/vector_fields/scripts/classes/VectorField3D.gd" id="2_oh6qd"]
+[ext_resource type="Script" uid="uid://b1y7jfjsqkfw4" path="res://addons/vector_fields/scripts/classes/custom_emitters/point_emitter.gd" id="3_oh6qd"]
+[ext_resource type="Script" uid="uid://ryeylxce5gej" path="res://addons/vector_fields/scripts/classes/custom_emitters/vortex_emitter.gd" id="4_l6fjr"]
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_an1ts"]
 radius = 0.4
 
 [node name="Test1" type="Node3D"]
 
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.1847, 0, 0)
+mesh = SubResource("CapsuleMesh_an1ts")
+
 [node name="VectorField3D" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.02666, 0.478444, 0)
 script = ExtResource("2_oh6qd")
 LOD = 2
-vector_field_size = Vector3i(10, 7, 10)
-grid_color = Color(1, 1, 1, 0.184314)
+vector_field_size = Vector3i(15, 15, 15)
+draw_vectors_only = true
 metadata/_custom_type_script = "uid://y73g5fla2gpe"
 
 [node name="VectorFieldBoxEmitter3D" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.933132, 0.855363, -0.242288)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.84733, 0.292443, 4.03693)
 script = ExtResource("2_an1ts")
 target_vector = Vector3(1, 1, 1)
+max_distance = 1.35
 metadata/_custom_type_script = "uid://x6yb1pv8gjby"
 
-[node name="VectorFieldBoxEmitter3D2" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.52206, 0.466764, 0.388516)
-script = ExtResource("2_an1ts")
-target_vector = Vector3(-1, -3.965, -1)
-max_distance = 2.0
-metadata/_custom_type_script = "uid://x6yb1pv8gjby"
+[node name="VectorFieldPointEmitter3D" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.615987, 5.71513, 0.879033)
+script = ExtResource("3_oh6qd")
+max_distance = 1.955
+metadata/_custom_type_script = "uid://b1y7jfjsqkfw4"
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1847, 0, 0)
-mesh = SubResource("CapsuleMesh_an1ts")
+[node name="VectorFieldVortexEmitter3D" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.400736, 0, 0)
+script = ExtResource("4_l6fjr")
+rotation_axis = Vector3(0.756303, 0.288589, 0.58713)
+max_distance = 1.955
+metadata/_custom_type_script = "uid://ryeylxce5gej"
