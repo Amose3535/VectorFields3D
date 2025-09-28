@@ -71,19 +71,19 @@ signal vf3d_updated(vf3d : VectorField3D)
 	set(new_color):
 		bounding_box_color = new_color
 		if Engine.is_editor_hint():
-			_redraw_mesh()
+			_redraw_mesh(draw_debug_lines,draw_vectors_only)
 
 @export var grid_color : Color = Color.DARK_GRAY:
 	set(new_color):
 		grid_color = new_color
 		if Engine.is_editor_hint():
-			_redraw_mesh()
+			_redraw_mesh(draw_debug_lines,draw_vectors_only)
 
 @export var vector_color : Color = Color.YELLOW:
 	set(new_color):
 		vector_color = new_color
 		if Engine.is_editor_hint():
-			_redraw_mesh()
+			_redraw_mesh(draw_debug_lines,draw_vectors_only)
 #endregion
 
 
@@ -171,6 +171,8 @@ func _initialize_vector_data(_vector_field_size : Vector3i = vector_field_size):
 
 ## The function responsible for computing the contribution of each compatible emitter to the vector grid.
 func _compute_field_vectors() -> void:
+	if !is_inside_tree():
+		return
 	if !active:
 		return
 	
@@ -178,7 +180,7 @@ func _compute_field_vectors() -> void:
 	_initialize_vector_data()
 	
 	# Get all emitters from the emitter group
-	var all_emitters := get_tree().get_nodes_in_group(VectorFieldBaseEmitter3D.EMITTER_GROUP)
+	var all_emitters : Array[Node] = get_tree().get_nodes_in_group(VectorFieldBaseEmitter3D.EMITTER_GROUP)
 	# Compute VectorField3D s AABB
 	var field_size_half = world_size / 2.0
 	# VectorField's center
@@ -298,6 +300,52 @@ func _recalculate_vectors_in_zone(zone_aabb: AABB) -> void:
 						net_vector += (emitter as VectorFieldBaseEmitter3D).get_vector_at_position(cell_global_pos)
 						
 				vector_data[x][y][z] = net_vector
+
+## Public function used to get the force vector at the specified global position.[br]
+## Returns Vector3.ZERO if the point is outside the VectorField's Bounding Box.[br]
+## This is what allows for the actual real usage of the VectorField3D.
+func get_vector_at_global_position(global_pos: Vector3) -> Vector3:
+	# 1. Calculate the Field's global Bounding Box (AABB)
+	var half_world_size: Vector3 = world_size / 2.0
+	var field_global_center: Vector3 = global_position
+	
+	# Create the AABB in world coordinates
+	var field_aabb = AABB(field_global_center - half_world_size, world_size)
+	
+	# If the global point is NOT within the AABB, exit early.
+	if not field_aabb.has_point(global_pos):
+		return Vector3.ZERO
+	
+	# 2. Map the global position to the Field's local coordinates:
+	# global_pos = global_transform*local_pos  >>>>>  local_pos = global_transform_inverse*local_pos
+	var local_pos: Vector3 = global_transform.inverse() * global_pos
+	
+	# 3. Calculate the normalized position (ranging from 0 to 1)
+	# Shift the origin from [-half_size, +half_size] to [0, world_size] and normalize.
+	var normalized_pos: Vector3 = (local_pos + half_world_size) / world_size
+	
+	# 4. Calculate the Array indices
+	var indices: Vector3i = Vector3i(
+		int(floor(normalized_pos.x * vector_field_size.x)),
+		int(floor(normalized_pos.y * vector_field_size.y)),
+		int(floor(normalized_pos.z * vector_field_size.z))
+	)
+	
+	# 5. Extract the indices for clarity
+	var x: int = indices.x
+	var y: int = indices.y
+	var z: int = indices.z
+	
+	# Sanity check: since we already checked the AABB, this should always pass.
+	if (x >= 0 and x < vector_field_size.x and 
+		y >= 0 and y < vector_field_size.y and 
+		z >= 0 and z < vector_field_size.z):
+		
+		# Return the vector data from the cell
+		return vector_data[x][y][z]
+		
+	# Fallback, just in case (though highly unlikely after the AABB check)
+	return Vector3.ZERO
 #endregion
 
 

@@ -1,0 +1,20 @@
+[gd_scene load_steps=3 format=3 uid="uid://conf2dspe2n2m"]
+
+[ext_resource type="Script" uid="uid://y73g5fla2gpe" path="res://addons/vector_fields/scripts/classes/VectorField3D.gd" id="1_gcic0"]
+[ext_resource type="Script" uid="uid://x6yb1pv8gjby" path="res://addons/vector_fields/scripts/classes/custom_emitters/box_emitter.gd" id="2_xdg63"]
+
+[node name="Test2" type="Node3D"]
+
+[node name="VectorField3D" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.108275)
+script = ExtResource("1_gcic0")
+LOD = 3
+vector_field_size = Vector3i(10, 10, 10)
+draw_vectors_only = true
+metadata/_custom_type_script = "uid://y73g5fla2gpe"
+
+[node name="VectorFieldBoxEmitter3D" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.24593)
+script = ExtResource("2_xdg63")
+target_vector = Vector3(0.865, -1, 1)
+metadata/_custom_type_script = "uid://x6yb1pv8gjby"

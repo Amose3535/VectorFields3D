@@ -1,4 +1,1 @@
 res://addons/vector_fields/scenes/tests/generic/Test1.tscn
-res://addons/vector_fields/scripts/classes/VectorField3D.gd
-res://addons/vector_fields/scripts/classes/VectorFieldBaseEmitter3D.gd
-res://addons/vector_fields/scenes/utils/study_material.tres
