@@ -10,10 +10,7 @@ class_name VectorField3D
 #region signals
 signal vf3d_entered_group(vf3d : VectorField3D)
 signal vf3d_exited_group(vf3d : VectorField3D)
-signal vf3d_activity_updated(vf3d: VectorField3D, new_activity_state: bool)
-signal vf3d_update_interval_updated(vf3d: VectorField3D, new_interval: float)
-signal vf3d_lod_updated(vf3d: VectorField3D, new_lod: int)
-signal vf3d_vector_field_size_updated(vf3d: VectorField3D, new_vf_size: Vector3i)
+signal vf3d_updated(vf3d : VectorField3D)
 #endregion
 
 
@@ -25,7 +22,7 @@ signal vf3d_vector_field_size_updated(vf3d: VectorField3D, new_vf_size: Vector3i
 		# Set every internal variable accordingly
 		LOD = new_lod
 		_recalculate_parameters(new_lod, vector_field_size)
-		emit_signal("vf3d_lod_updated",new_lod)
+		emit_signal(&"vf3d_updated",new_lod)
 		if Engine.is_editor_hint():
 			_redraw_mesh()
 
@@ -40,7 +37,7 @@ signal vf3d_vector_field_size_updated(vf3d: VectorField3D, new_vf_size: Vector3i
 			vector_field_size = new_field_size
 		# AFTER validating the new_field_size, set every internal variable
 		_recalculate_parameters(LOD, new_field_size)
-		emit_signal("vf3d_vector_field_size_updated",new_field_size)
+		emit_signal(&"vf3d_updated",new_field_size)
 		if Engine.is_editor_hint():
 			_redraw_mesh()
 
@@ -48,7 +45,7 @@ signal vf3d_vector_field_size_updated(vf3d: VectorField3D, new_vf_size: Vector3i
 @export var active : bool = true:
 	set(new_activity):
 		active = new_activity
-		emit_signal("vf3d_activity_updated",new_activity)
+		emit_signal(&"vf3d_updated",new_activity)
 
 ## InteractionLayer is the layer that defines the interaction between emitters and fields. Only emitters on the same laer as another field will be able to affect its vectors. 
 @export_flags_3d_physics var interaction_layer = 1
@@ -77,6 +74,7 @@ signal vf3d_vector_field_size_updated(vf3d: VectorField3D, new_vf_size: Vector3i
 
 
 #region INTERNALS
+## The StringName for the group containing all fields
 const FIELDS_GROUP : StringName = &"VectorFields3D"
 ## Corresponds to the length of the edge of a cube from the VectorField3D.[br]It's directly influenced by the LOD.
 var cube_edge : float = 1/LOD
@@ -86,51 +84,40 @@ var vector_data : Array = []
 var world_size : Vector3 = Vector3(vector_field_size)*cube_edge
 ## The mesh that is responsible for drawing debug lines
 var debug_mesh : MeshInstance3D = MeshInstance3D.new()
+## Cache to track the previous global position of each emitter to detect movement.
+var _emitter_positions_cache: Dictionary = {}
+## Cache to track non-positional properties (like max_distance) if needed.
+var _emitter_properties_cache: Dictionary = {} # Optional: For future complex change detection
 #endregion
 
 
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
-	# Generic logic --------------------------------------------------------------------------------
+	# Generic logic
 	# Add the current VectorField3D into a custom group
 	if !is_in_group(FIELDS_GROUP):
 		self.add_to_group(FIELDS_GROUP)
-		emit_signal("vf3d_entered_group") # Emit specific signal
-		#print("Added %s to group VectorFields3D!"%self)
+		emit_signal(&"vf3d_entered_group",self)
 	
-	_clear_debug_mesh()                             # Clear all possible debug meshes
-	_instantiate_debug_mesh()                       # Instantiate a new debug mesh
-	_recalculate_parameters(LOD, vector_field_size) # Recalculate parameters
-	_draw_debug_lines()                             # Draw initial state of VectorField3D
+	_clear_debug_mesh()
+	_instantiate_debug_mesh()
+	_recalculate_parameters(LOD, vector_field_size)
 	
-	# Editor logic ---------------------------------------------------------------------------------
+	# Editor logic
 	if Engine.is_editor_hint():
-		# Insert Editor logic here
+		# In editor, use call_deferred to give enough time to the Emitters to have their _ready() and call call_group.
+		call_deferred("_compute_field_vectors")
 		return
 	
-	# Runtime logic --------------------------------------------------------------------------------
-	# Insert Runtime logic here
-	pass
+	# Runtime logic
+	_compute_field_vectors() # A runtime, è sicuro calcolare subito.
+	_draw_debug_lines(draw_vectors_only)
 
-# Called every physics frame. 'delta' is the elapsed time since the previous frame.
-func _physics_process(delta: float) -> void:
-	# Generic logic --------------------------------------------------------------------------
-	# 1. Get emitters from emitter layer ("VectorFieldEmitters3D").
-	# 2. Cycle over emitters, skipping the ones with the wrong interaction layer.
-	# 3. Iterate on each cell and add to the cell the contribute of that specific emitter.
-	
-	
-	# Editor logic ---------------------------------------------------------------------------
-	if Engine.is_editor_hint():
-		return
-	
-	# Runtime logic --------------------------------------------------------------------------
-	pass
 
 # Called when the node is about to get deleted from tree
 func _exit_tree() -> void:
-	emit_signal("vf3d_exited_group")
+	emit_signal(&"vf3d_exited_group",self)
 
 #region INTERNAL FUNCTIONS
 ## The function used to recalculate the parameters
@@ -138,51 +125,35 @@ func _recalculate_parameters(new_lod=LOD, new_vector_field_size=vector_field_siz
 	cube_edge = 1.0 / float(new_lod)
 	world_size = Vector3(new_vector_field_size) * cube_edge
 	_initialize_vector_data(new_vector_field_size) # Formats data structure to accept vectors in the new cells
-	# La funzione _update_field_size() non è più strettamente necessaria se usi il metodo di disegno con ImmediateMesh
-	# dal momento che la scala è gestita internamente dal disegno.
-	# _update_field_size()
-
 
 ## The function responsible for reformatting the vector_data variable in order to handle the different sizes
-func _initialize_vector_data(_vector_field_size = vector_field_size):
+func _initialize_vector_data(_vector_field_size : Vector3i = vector_field_size):
 	# 1. Caching the dimensions to prevent mid-run changes 
-	#    (though const prevents this, it's good practice for non-const variables)
 	var cached_size: Vector3i = vector_field_size
 	
-	# Clear the member array to ensure a fresh start
+	# Clear the vector_data to ensure a fresh start
 	vector_data.clear()
-
-	# Get dimensions for clearer loop reading
-	var dim_x := cached_size.x
-	var dim_y := cached_size.y
-	var dim_z := cached_size.z
 	
-	# 2. Loop for the X-dimension (The outermost array, containing Y-arrays)
-	for x in range(dim_x):
-		var array_y = [] # The middle array (Y-dimension)
-		
-		# 3. Loop for the Y-dimension (Containing Z-arrays)
-		for y in range(dim_y):
-			var array_z = [] # The innermost array (Z-dimension)
-			
-			# 4. Loop for the Z-dimension (Populating with values)
-			for z in range(dim_z):
-				# Populate the innermost array with Vector3.ZERO
-				array_z.append(Vector3.ZERO)
-			
-			# Add the initialized Z-array to the Y-array
-			array_y.append(array_z)
-		
-		# Add the initialized Y-array to the main 3D grid array
-		vector_data.append(array_y)
+	# Initialize vector_data
+	vector_data.resize(cached_size.x) # X-dimension
+	for x in cached_size.x:
+		vector_data[x] = []
+		vector_data[x].resize(cached_size.y) # Y-dimension
+		for y in cached_size.y:
+			vector_data[x][y] = []
+			vector_data[x][y].resize(cached_size.z) # Z-dimension
+			for z in cached_size.z:
+				vector_data[x][y][z] = Vector3.ZERO
 	
 	# Optional: Verification print (OK)
-	#print("3D Grid initialized. Dimensions: %d x %d x %d. Total elements: %d."%[dim_x, dim_y, dim_z, dim_x*dim_y*dim_z])
+	#print("3D Grid initialized. Dimensions: %d x %d x %d. Total elements: %d."%[cached_size.x, cached_size.y, cached_size.z, cached_size.x*cached_size.y*cached_size.z])
 	#print(vector_data)
-
 
 ## The function responsible for computing the contribution of each compatible emitter to the vector grid.
 func _compute_field_vectors() -> void:
+	# Initialize all vectors to zero
+	_initialize_vector_data()
+	
 	# Get all emitters from the emitter group
 	var all_emitters := get_tree().get_nodes_in_group(VectorFieldBaseEmitter3D.EMITTER_GROUP)
 	# Compute VectorField3D s AABB
@@ -191,37 +162,150 @@ func _compute_field_vectors() -> void:
 	var field_global_center = global_transform.origin 
 	# VectorField's AABB in World Space
 	var field_aabb = AABB(field_global_center - field_size_half, world_size)
+	# Compute cell size and origin ONCE (for all emitters)
+	var cell_size : Vector3 = world_size / Vector3(vector_field_size)
+	var origin : Vector3 = global_position-world_size/2
+	
+	# Cycle in all the emitters
 	for emitter in all_emitters:
-		var OK : bool = true
 		# If the node isn't of type or inherited type 'VectorFieldBaseEmitter3D', skip
 		if !emitter is VectorFieldBaseEmitter3D:
-			OK = false
+			continue # NOT ok, skip to next itaration
 		# If the layers don't match, skip
-		if emitter.interaction_layer != self.interaction_layer:
-			OK = false
+		if (emitter.interaction_layer & self.interaction_layer) == 0: # Bit-wise and comparison
+			continue # No layer in common: skip to next iteration
 		# Create emitter's AABB with the data at our disposal
 		var emitter_radius = emitter.max_distance
-		var emitter_aabb = AABB(
-			emitter.global_position - Vector3.ONE * emitter_radius, 
-			Vector3.ONE * emitter_radius * 2.0
-		)
+		var emitter_aabb = AABB(emitter.global_position - Vector3.ONE * emitter_radius, Vector3.ONE * emitter_radius * 2.0)
 		# If the emitter's AABB and the Field's AABB don't touch nor intersect, skip
 		if !field_aabb.intersects(emitter_aabb):
-			OK = false
+			continue # They don't intersect, continue to next emitter
 		
-		if OK:
-			# Compute the emitter's contribution to the field
-			for x in range(vector_field_size.x):
-				for y in range(vector_field_size.y):
-					for z in range(vector_field_size.z):
-						var cell_center : Vector3
-						(emitter as VectorFieldBaseEmitter3D).get_vector_at_position(cell_center)
+		# Compute the emitter's contribution ---------------------------------------------------
 		
+		# Same thing as nested 'for's: cycle on variables x,y,z from 0 to X/Y/Z.
+		for x in range(vector_field_size.x): for y in range(vector_field_size.y): for z in range(vector_field_size.z):
+			# Get the offset of the cell
+			var cell_offset : Vector3 = Vector3(cell_size.x*x, cell_size.y*y, cell_size.z*z)
+			# Compute the global position of the center of that cell
+			var cell_center_global_position : Vector3 = origin + cell_offset + cell_size/2
+			# Compute contribution from cell center
+			var contribution : Vector3 = (emitter as VectorFieldBaseEmitter3D).get_vector_at_position(cell_center_global_position)
+			# Add contribution to vector_data
+			vector_data[x][y][z] += contribution
+
+## This function gets called through get_tree().call_group(...)
+func receive_emitter_update(emitter: VectorFieldBaseEmitter3D) -> void:
+	print("[Field] Recieved update from Emitter!")
+	
+	# 1. Check if the emitter is new OR if a property (like max_distance) has changed.
+	var is_new_emitter = not _emitter_positions_cache.has(emitter)
+	
+	# For simplicity, if the max_distance changed, we force a full recalculation
+	var current_distance = emitter.max_distance
+	var cached_distance = _emitter_properties_cache.get(emitter, -1.0)
+	var is_property_change = not is_new_emitter and not is_equal_approx(current_distance, cached_distance)
+	
+	if is_new_emitter or is_property_change:
+		print("[Field] Full recalculation triggered.")
+		# Full Recalculation (expensive, but necessary for structure/property change)
+		_compute_field_vectors()
+		_emitter_positions_cache[emitter] = emitter.global_position
+		_emitter_properties_cache[emitter] = current_distance
+		
+	else:
+		# 2. Localized Update (Movement Check)
+		var old_pos: Vector3 = _emitter_positions_cache.get(emitter, emitter.global_position) # Usa default per sicurezza
+		var new_pos: Vector3 = emitter.global_position
+		var r = emitter.max_distance
+		
+		# If the position is the same, do nothing.
+		if not old_pos.is_equal_approx(new_pos):
+			print("[Field] Localized recalculation triggered.")
+			
+			# Calculate the Update AABB (Merged Old Zone + New Zone)
+			var old_aabb = AABB(old_pos - Vector3.ONE * r, Vector3.ONE * r * 2.0)
+			var new_aabb = AABB(new_pos - Vector3.ONE * r, Vector3.ONE * r * 2.0)
+			var update_aabb = old_aabb.merge(new_aabb)
+			
+			_recalculate_vectors_in_zone(update_aabb)
+			
+			# Update cache for next time
+			_emitter_positions_cache[emitter] = new_pos
+	
+	# The debug mesh should be redrawn after any change
+	if Engine.is_editor_hint():
+		_redraw_mesh(draw_debug_lines, draw_vectors_only)
+
+## Recalculates the vector contributions only within the specified global AABB (zone_aabb).
+## This is the core of the performance optimization.
+func _recalculate_vectors_in_zone(zone_aabb: AABB) -> void:	
+	var cube_edge_local = cube_edge
+	var field_origin_local = -world_size / 2.0
+	
+	# --- 1. Map Global AABB to Local Grid Indices ---
+	
+	# Convert Global AABB to Local AABB
+	var inverse_transform = global_transform.inverse()
+	var zone_aabb_local = inverse_transform * zone_aabb
+	
+	# Calculate start index (clamp to field size)
+	var min_index_float = (zone_aabb_local.position - field_origin_local) / cube_edge_local
+	var start_x = max(0, int(floor(min_index_float.x)))
+	var start_y = max(0, int(floor(min_index_float.y)))
+	var start_z = max(0, int(floor(min_index_float.z)))
+	
+	# Calculate end index (clamp to field size)
+	var max_index_float = (zone_aabb_local.position + zone_aabb_local.size - field_origin_local) / cube_edge_local
+	var end_x = min(vector_field_size.x, int(ceil(max_index_float.x)))
+	var end_y = min(vector_field_size.y, int(ceil(max_index_float.y)))
+	var end_z = min(vector_field_size.z, int(ceil(max_index_float.z)))
+	
+	
+	# --- 2. Pre-filter Emitters (same logic as _compute_field_vectors) ---
+	var all_emitters = get_tree().get_nodes_in_group(VectorFieldBaseEmitter3D.EMITTER_GROUP)
+	var field_aabb = AABB(global_transform.origin - world_size/2.0, world_size)
+	var relevant_emitters = []
+	
+	for emitter in all_emitters:
+		# Use the same three-way filter (Type, Layer, Field AABB intersection)
+		if not emitter is VectorFieldBaseEmitter3D: continue
+		if (emitter.interaction_layer & self.interaction_layer) == 0: continue
+		var r = (emitter as VectorFieldBaseEmitter3D).max_distance
+		var emitter_aabb = AABB(emitter.global_position - Vector3.ONE * r, Vector3.ONE * r * 2.0)
+		if not field_aabb.intersects(emitter_aabb): continue
+		
+		relevant_emitters.append(emitter)
+	
+	
+	# --- 3. Localized Recalculation Loop ---
+	var cube_edge_half = cube_edge_local / 2.0
+	
+	# Loop only over the calculated indices
+	for x in range(start_x, end_x):
+		for y in range(start_y, end_y):
+			for z in range(start_z, end_z):
+				
+				# Reset cell vector to ZERO for a fresh recalculation of ALL relevant emitters
+				var net_vector = Vector3.ZERO
+				
+				# Calculate the global position of the cell center
+				var cell_local_center = field_origin_local + Vector3(x, y, z) * cube_edge_local + Vector3.ONE * cube_edge_half
+				var cell_global_pos = global_transform * cell_local_center
+				
+				# Calculate contribution from ALL relevant emitters for this cell
+				for emitter in relevant_emitters:
+					var r_sq = (emitter as VectorFieldBaseEmitter3D).max_distance * (emitter as VectorFieldBaseEmitter3D).max_distance
+					
+					# Final distance check (Point in Sphere)
+					if emitter.global_position.distance_squared_to(cell_global_pos) <= r_sq:
+						net_vector += (emitter as VectorFieldBaseEmitter3D).get_vector_at_position(cell_global_pos)
+						
+				vector_data[x][y][z] = net_vector
 #endregion
 
 
 #region DebugMesh functions
-
 ## function that first clears the old mesh and (if draw param is set to true) redraws the new one (handy when toggling draw state).
 func _redraw_mesh(draw : bool = true, vectors_only : bool = false) -> void:
 	# Clear old surfaces
@@ -232,14 +316,12 @@ func _redraw_mesh(draw : bool = true, vectors_only : bool = false) -> void:
 		# TODO: Also redraw the lines ONLY if the previous mesh is the same as the new one (performance optimization)
 		_draw_debug_lines(vectors_only)
 
-
 ## The function used to delete every possible debug_mesh instance in the scene tree.
 func _clear_debug_mesh() -> void:
 	# Trovo e rimuovo l'istanza esistente
 	for child in get_children():
 		if child is MeshInstance3D and child.name == "DebugMesh":
 			child.queue_free()
-
 
 ## The funciton used to spawn my debug mesh.
 func _instantiate_debug_mesh() -> void:
@@ -256,7 +338,6 @@ func _instantiate_debug_mesh() -> void:
 	new_material.vertex_color_use_as_albedo = true
 	debug_mesh.material_override = new_material
 
-
 ## Draw grid  + debug vectors
 func _draw_debug_lines(vectors_only : bool = false) -> void:
 	if not is_instance_valid(debug_mesh) or not (debug_mesh.mesh is ImmediateMesh):
@@ -266,8 +347,8 @@ func _draw_debug_lines(vectors_only : bool = false) -> void:
 	(debug_mesh.mesh as ImmediateMesh).surface_begin(Mesh.PRIMITIVE_LINES)
 	# Compute offset to position the grid
 	var offset = -world_size / 2.0
-	# Draw the bounding box of the VectorField3D if it's not displaying only the vectors
-	if !vectors_only: _draw_bounding_box(offset)
+	# Draw the bounding box of the VectorField3D
+	_draw_bounding_box(offset)
 	
 	# temporary flag to determine if there's at LEAST one nonzero vector or not
 	var nonzero_vector_flag : bool = false
@@ -328,7 +409,6 @@ func _draw_bounding_box(offset: Vector3, bounding_color : Color = bounding_box_c
 	add_line(points[2], points[6], bounding_color)
 	add_line(points[3], points[7], bounding_color)
 
-
 ## Adds a line to an open surface from a point in space "from" to a point in space "to" with a certain color "color"
 func add_line(from : Vector3, to : Vector3, color : Color = Color(1,1,1,1), force : bool = false):
 	# Early return for points too close to eachother (set force = true to draw a line on the same point)
@@ -346,7 +426,6 @@ func add_line(from : Vector3, to : Vector3, color : Color = Color(1,1,1,1), forc
 ## Adds a line to an open surface in space from point "from" to point "from+to_relative" with a certain color "color"
 func add_line_relative(from : Vector3, to_relative : Vector3, color : Color) -> void:
 	add_line(from, from + to_relative, color)
-
 
 ## Adds a line to an open surface from a point in space "from" to a point in space "to" with a certain color "color"
 func draw_line(from : Vector3, to : Vector3, color : Color = Color(1,1,1,1)):
@@ -366,7 +445,6 @@ func draw_line(from : Vector3, to : Vector3, color : Color = Color(1,1,1,1)):
 	
 	# Close surface
 	(debug_mesh.mesh as ImmediateMesh).surface_end()
-	
 
 ## Adds a line to an open surface in space from point "from" to point "from+to_relative" with a certain color "color"
 func draw_line_relative(from : Vector3, to_relative : Vector3, color : Color) -> void:

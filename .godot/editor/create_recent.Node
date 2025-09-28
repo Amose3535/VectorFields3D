@@ -1,2 +1,5 @@
+VectorFieldBoxEmitter3D
 VectorFieldBaseEmitter3D
+VectorFieldPointEmitter3D
+Camera3D
 VectorField3D

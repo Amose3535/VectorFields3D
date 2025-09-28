@@ -9,13 +9,19 @@ class_name VectorFieldBaseEmitter3D
 ## VectorFieldBaseEmitter3D allows with its highly configurable API to  make your very own emitter with very specific properties.[br]
 ## VectorFieldBaseEmitter3D should be abstract considering the implementation BUT since this is actively being developed in 4.4 AND it's made to be also backwards-compatible it currently isn't.[br]
 
+
+#region EXPORTS
 ## The interaction layer determines the fields which this emitter will interact with.
-@export_flags_3d_physics var interaction_layer = 1
+@export_flags_3d_physics var interaction_layer = 1:
+	set(new_interaction_layer):
+		interaction_layer=new_interaction_layer
+		notify_fields_of_update()
 ## The max distance is a radial distance used by the vector fields for optimization purposes: Every field outisde the max_distance range won't even bother considering the contribution for this emitter.[br][br]For best results it's reccomended to use a max_distance >= a distance at which the vector are 0 or really close to it.
 @export var max_distance : float = 1:
 	set(new_distance):
-		max_distance = new_distance
-		_recalculate_parameters(new_distance)
+		max_distance = max(0.0,new_distance) # Stops distance from going in the negatives
+		_recalculate_parameters(max_distance)
+		notify_fields_of_update()
 		if Engine.is_editor_hint():
 			_redraw_mesh()
 
@@ -29,7 +35,7 @@ class_name VectorFieldBaseEmitter3D
 	set(new_color):
 		if Engine.is_editor_hint():
 			_redraw_mesh()
-
+#endregion
 
 #region INTERNALS
 ## The StringName of the group containing all emitters
@@ -40,8 +46,10 @@ var world_size : Vector3 = Vector3.ONE * max_distance * 2
 var debug_mesh : MeshInstance3D = MeshInstance3D.new()
 #endregion
 
-## VectorFieldBaseEmitter's _ready() function.[br]NOTE: Remember to always add 'super._ready()' at the top of your ready function if you plan on using _ready().
+## VectorFieldBaseEmitter's _ready() function.[br]NOTE: Remember to always add 'super._ready()' at the top of your ready function if you plan on using it in a child script.
 func _ready() -> void:
+	# Requests notifications on transform change
+	set_notify_transform(true)
 	# Add the current VectorFieldPointEmitter into emitters Group
 	if !is_in_group(EMITTER_GROUP):
 		self.add_to_group(EMITTER_GROUP)
@@ -58,17 +66,36 @@ func _ready() -> void:
 	# Runtime logic here
 	pass
 
+## VectorFieldBaseEmitter's _notification(what: int) function.[br]NOTE: Remember to always add 'super._notification(what)' at the top of your notification function if you plan on using it in a child script.
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_TRANSFORM_CHANGED:
+			notify_fields_of_update()
 
-## This is the function used to compute the vector contribution for a given point in space. It spits out the vector contribution as a Vector3 in magnitude form (basically local coordinates).
-func get_vector_at_position(vector_pos : Vector3) -> Vector3:
-	# Insert behavior in child class
-	return Vector3.ZERO
 
 
 #region INTERNAL FUNCTIONS
 ## The function that, when called is responsible for updating all parameters.
 func _recalculate_parameters(new_max_distance : float = max_distance) -> void:
 	world_size = Vector3.ONE * new_max_distance * 2
+
+## This is the function used to compute the vector contribution for a given point in space. It spits out the vector contribution as a Vector3 in magnitude form (basically local coordinates).
+func get_vector_at_position(vector_pos : Vector3) -> Vector3:
+	# Insert behavior in child class
+	return Vector3.ONE
+
+# VectorFieldBaseEmitter3D.gd
+
+## Public Function to tell the fields an update occurred
+func notify_fields_of_update() -> void:
+	if not is_inside_tree():
+		return
+	if Engine.is_editor_hint():
+		# Deferred mode call
+		get_tree().call_group_flags(SceneTree.GROUP_CALL_DEFERRED, VectorField3D.FIELDS_GROUP, &"receive_emitter_update", self)
+	else:
+		# Direct call
+		get_tree().call_group(VectorField3D.FIELDS_GROUP, &"receive_emitter_update", self)
 #endregion
 
 
