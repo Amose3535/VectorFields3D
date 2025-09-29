@@ -94,7 +94,7 @@ const FIELDS_GROUP : StringName = &"VectorFields3D"
 ## Corresponds to the length of the edge of a cube from the VectorField3D.[br]It's directly influenced by the LOD.
 var cube_edge : float = 1/LOD
 ## The data structure containing the vector data in local position for each cell.[br]By default, without any emitter interference, should be an n-dimensional matrix containing Vector3.ZERO's
-var vector_data : Array = []
+var vector_data : PackedVector3Array = PackedVector3Array()
 ## The in-world size that this field occupies.
 var world_size : Vector3 = Vector3(vector_field_size)*cube_edge
 ## The mesh that is responsible for drawing debug lines
@@ -155,19 +155,18 @@ func _initialize_vector_data(_vector_field_size : Vector3i = vector_field_size):
 	vector_data.clear()
 	
 	# Initialize vector_data
-	vector_data.resize(cached_size.x) # X-dimension
-	for x in cached_size.x:
-		vector_data[x] = []
-		vector_data[x].resize(cached_size.y) # Y-dimension
-		for y in cached_size.y:
-			vector_data[x][y] = []
-			vector_data[x][y].resize(cached_size.z) # Z-dimension
-			for z in cached_size.z:
-				vector_data[x][y][z] = Vector3.ZERO
+	vector_data.resize(cached_size.x*cached_size.y*cached_size.z)
 	
-	# Optional: Verification print (OK)
-	#print("3D Grid initialized. Dimensions: %d x %d x %d. Total elements: %d."%[cached_size.x, cached_size.y, cached_size.z, cached_size.x*cached_size.y*cached_size.z])
-	#print(vector_data)
+	# NOTE: OLD vector_Data initialization
+	#for x in cached_size.x:
+		#vector_data[x] = []
+		#vector_data[x].resize(cached_size.y) # Y-dimension
+		#for y in cached_size.y:
+			#vector_data[x][y] = []
+			#vector_data[x][y].resize(cached_size.z) # Z-dimension
+			#for z in cached_size.z:
+				#vector_data[x][y][z] = Vector3.ZERO
+	
 
 ## The function responsible for computing the contribution of each compatible emitter to the vector grid.
 func _compute_field_vectors() -> void:
@@ -218,7 +217,19 @@ func _compute_field_vectors() -> void:
 			# Compute contribution from cell center
 			var contribution : Vector3 = (emitter as VectorFieldBaseEmitter3D).get_vector_at_position(cell_center_global_position)
 			# Add contribution to vector_data
-			vector_data[x][y][z] += contribution
+			_add_to_cell(Vector3i(x,y,z),contribution)
+
+## Function used to add a value to a cell with coordinates x, y, z using my vector_data 1D array
+func _add_to_cell(pos : Vector3i, value : Vector3) -> void:
+	vector_data[pos.x+(pos.y*vector_field_size.x)+(pos.z*vector_field_size.x*vector_field_size.y)] += value
+
+## Function used to set a value on a cell with coordinates x, y, z using my vector_data 1D array
+func _set_cell(pos : Vector3i, value : Vector3) -> void:
+	vector_data[pos.x+(pos.y*vector_field_size.x)+(pos.z*vector_field_size.x*vector_field_size.y)] = value
+
+## Function used to get the data inside a cell with coordinates x, y, z using my vector_data 1D array
+func _get_cell(pos: Vector3i) -> Vector3:
+	return vector_data[pos.x+(pos.y*vector_field_size.x)+(pos.z*vector_field_size.x*vector_field_size.y)]
 
 ## This function gets called through get_tree().call_group(...)
 func receive_emitter_update(emitter: VectorFieldBaseEmitter3D) -> void:
@@ -302,7 +313,7 @@ func _recalculate_vectors_in_zone(zone_aabb: AABB) -> void:
 					# ma ci affidiamo alla logica AABB-based di get_vector_at_position (che farà il check AABB)
 					net_vector += (emitter as VectorFieldBaseEmitter3D).get_vector_at_position(cell_global_pos)
 						
-				vector_data[x][y][z] = net_vector
+				_set_cell(Vector3i(x,y,z),net_vector)
 
 ## Public function used to get the force vector at the specified global position.[br]
 ## Returns Vector3.ZERO if the point is outside the VectorField's Bounding Box.[br]
@@ -345,7 +356,7 @@ func get_vector_at_global_position(global_pos: Vector3) -> Vector3:
 		z >= 0 and z < vector_field_size.z):
 		
 		# Return the vector data from the cell
-		return vector_data[x][y][z]
+		return _get_cell(Vector3i(x,y,z))
 		
 	# Fallback, just in case (though highly unlikely after the AABB check)
 	return Vector3.ZERO
@@ -406,7 +417,7 @@ func _draw_debug_lines(vectors_only : bool = false) -> void:
 		for y in range(vector_field_size.y):
 			for z in range(vector_field_size.z):
 				var cell_pos_local = Vector3(x, y, z) * cube_edge + offset
-				var vector_force : Vector3 = vector_data[x][y][z]
+				var vector_force : Vector3 = _get_cell(Vector3i(x,y,z))
 				
 				# Draw grid (optional)
 				if !vectors_only:

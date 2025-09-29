@@ -1,6 +1,6 @@
+RigidBody3D
 VectorFieldPointEmitter3D
 VectorFieldVortexEmitter3D
-RigidBody3D
 CSGBox3D
 VectorFieldInteractionHandler3D
 VectorFieldBoxEmitter3D

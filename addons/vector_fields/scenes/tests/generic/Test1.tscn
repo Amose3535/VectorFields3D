@@ -16,8 +16,8 @@ mesh = SubResource("CapsuleMesh_an1ts")
 
 [node name="VectorField3D" type="Node3D" parent="."]
 script = ExtResource("2_oh6qd")
-LOD = 1.5
-vector_field_size = Vector3i(20, 20, 20)
+LOD = 2.5
+vector_field_size = Vector3i(30, 30, 30)
 draw_vectors_only = true
 metadata/_custom_type_script = "uid://y73g5fla2gpe"
 
@@ -33,7 +33,7 @@ max_size = Vector3(6.21, 3.93, 6.355)
 metadata/_custom_type_script = "uid://ryeylxce5gej"
 
 [node name="VectorFieldPointEmitter3D" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.00035, 0, 1.00423)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.245729, 1.99997, -1.45053)
 script = ExtResource("3_oh6qd")
 max_size = Vector3(6, 6, 6)
 min_magnitude = 0.2
