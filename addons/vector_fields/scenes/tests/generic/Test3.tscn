@@ -11,9 +11,6 @@ albedo_color = Color(0.0784314, 0.129412, 0, 1)
 size = Vector3(20, 0.2, 20)
 material = SubResource("StandardMaterial3D_onbu4")
 
-[node name="RigidBody3D" type="RigidBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
-
 [node name="VectorFieldBoxEmitter3D" type="Node3D" parent="."]
 script = ExtResource("1_h4dog")
 metadata/_custom_type_script = "uid://x6yb1pv8gjby"

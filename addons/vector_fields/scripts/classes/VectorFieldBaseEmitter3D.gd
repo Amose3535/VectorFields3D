@@ -105,10 +105,14 @@ func _notification(what: int) -> void:
 
 
 func _enter_tree() -> void:
+	if !is_inside_tree():
+		return
 	notify_fields_of_update(self.global_position, self.world_size)
 
 func _exit_tree() -> void:
-	notify_fields_of_update(self.global_position, self.world_size)
+	if !is_inside_tree() || is_instance_valid(self):
+		return
+	notify_fields_of_update(Vector3(), Vector3(), true)
 
 
 #region INTERNAL FUNCTIONS
@@ -116,6 +120,8 @@ func _exit_tree() -> void:
 ## The function used to request an update on the fields.[br]
 ## On the first frame it might cause issues (untested) since the first old_position is Vector3() but other than that should be fine.
 func request_update() -> void:
+	if !is_inside_tree():
+		return
 	# Notify the fields of an update with the previous transform
 	notify_fields_of_update(old_position,old_size)
 	# Then update it to
@@ -131,7 +137,9 @@ func get_vector_at_position(vector_pos : Vector3) -> Vector3:
 	return Vector3.ZERO
 
 ## Public Function to tell the fields an update occurred
-func notify_fields_of_update(pre_notification_pos : Vector3, pre_notification_world_size : Vector3) -> void:
+func notify_fields_of_update(pre_notification_pos : Vector3, pre_notification_world_size : Vector3, force : bool = false) -> void:
+	if !is_inside_tree():
+		return
 	# Get the group name from the other class (assuming VectorField3D is known via autoload or script)
 	const VF_GROUP = &"VectorFields3D" 
 	
@@ -141,10 +149,10 @@ func notify_fields_of_update(pre_notification_pos : Vector3, pre_notification_wo
 		return
 	if Engine.is_editor_hint():
 		# Deferred mode call
-		get_tree().call_group_flags(SceneTree.GROUP_CALL_DEFERRED, VF_GROUP, &"receive_emitter_update", self, old_info)
+		get_tree().call_group_flags(SceneTree.GROUP_CALL_DEFERRED, VF_GROUP, &"receive_emitter_update", self, old_info, force)
 	else:
 		# Direct call
-		get_tree().call_group(VF_GROUP, &"receive_emitter_update", self, old_info)
+		get_tree().call_group(VF_GROUP, &"receive_emitter_update", self, old_info, force)
 #endregion
 
 

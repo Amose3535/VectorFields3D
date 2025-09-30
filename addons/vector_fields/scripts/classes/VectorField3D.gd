@@ -194,6 +194,9 @@ func _ready() -> void:
 
 
 func _notification(what: int) -> void:
+	if !is_inside_tree():
+		return
+
 	match what:
 		NOTIFICATION_TRANSFORM_CHANGED:
 			var reset_rot_or_scale : bool = false
@@ -242,16 +245,22 @@ func _exit_tree() -> void:
 
 ## Function used to add a value to a cell with coordinates x, y, z using my vector_data 1D array
 func _add_to_cell(pos : Vector3i, value : Vector3) -> void:
+	if !is_inside_tree():
+		return
 	if pos.x < vector_field_size.x && pos.y < vector_field_size.y && pos.z < vector_field_size.z:
 		vector_data[pos.x+(pos.y*vector_field_size.x)+(pos.z*vector_field_size.x*vector_field_size.y)] += value
 
 ## Function used to set a value on a cell with coordinates x, y, z using my vector_data 1D array
 func _set_cell(pos : Vector3i, value : Vector3) -> void:
+	if !is_inside_tree():
+		return
 	if pos.x < vector_field_size.x && pos.y < vector_field_size.y && pos.z < vector_field_size.z:
 		vector_data[pos.x+(pos.y*vector_field_size.x)+(pos.z*vector_field_size.x*vector_field_size.y)] = value
 
 ## Function used to get the data inside a cell with coordinates x, y, z using my vector_data 1D array
 func _get_cell(pos: Vector3i) -> Vector3:
+	if !is_inside_tree():
+		return Vector3.ZERO
 	if pos.x < vector_field_size.x && pos.y < vector_field_size.y && pos.z < vector_field_size.z:
 		return vector_data[pos.x+(pos.y*vector_field_size.x)+(pos.z*vector_field_size.x*vector_field_size.y)]
 	else:
@@ -268,6 +277,8 @@ func _recalculate_parameters(new_lod=LOD, new_vector_field_size=vector_field_siz
 
 ## The function responsible for reformatting the vector_data variable in order to handle the different sizes
 func _initialize_vector_data(_vector_field_size : Vector3i = vector_field_size):
+	if !is_inside_tree():
+		return
 	# 1. Caching the dimensions to prevent mid-run changes 
 	var cached_size: Vector3i = vector_field_size
 	
