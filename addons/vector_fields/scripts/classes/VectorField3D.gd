@@ -174,23 +174,24 @@ func _ready() -> void:
 		self.add_to_group(FIELDS_GROUP)
 		emit_signal(&"vf3d_entered_group",self)
 	
-	# Requests notifications on transform change
+	# Requests notifications on future transform changes
 	set_notify_transform(true)
 	
 	_clear_debug_mesh()
 	_instantiate_debug_mesh()
 	_recalculate_parameters(LOD, vector_field_size)
 	
+	
+	_compute_field_vectors()
+	_draw_debug_lines(draw_vectors_only)
+	
 	# Editor logic
 	if Engine.is_editor_hint():
-		# In editor, use call_deferred to give enough time to the Emitters to have their _ready() and call call_group.
-		call_deferred("_compute_field_vectors")
-		call_deferred("_draw_debug_lines",draw_vectors_only)
+		# Insert "editor only" logic here
 		return
 	
 	# Runtime logic
-	_compute_field_vectors() # A runtime, è sicuro calcolare subito.
-	_draw_debug_lines(draw_vectors_only)
+	# Insert "runtime-only" logic here
 
 
 func _notification(what: int) -> void:
@@ -266,7 +267,23 @@ func _get_cell(pos: Vector3i) -> Vector3:
 	else:
 		return Vector3.ZERO
 
+func get_cell_index_from_local_pos(local_pos: Vector3) -> Vector3i:
+	var half_world_size: Vector3 = world_size / 2.0
+	var normalized_pos: Vector3 = (local_pos + half_world_size) / world_size
+	
+	return Vector3i(
+		int(floor(normalized_pos.x * vector_field_size.x)),
+		int(floor(normalized_pos.y * vector_field_size.y)),
+		int(floor(normalized_pos.z * vector_field_size.z))
+	)
 
+func get_vector_at_cell_index(index: Vector3i) -> Vector3:
+	var x: int = clamp(index.x, 0, vector_field_size.x - 1)
+	var y: int = clamp(index.y, 0, vector_field_size.y - 1)
+	var z: int = clamp(index.z, 0, vector_field_size.z - 1)
+	
+	# Usiamo la funzione interna _get_cell per la lookup effettiva
+	return _get_cell(Vector3i(x,y,z))
 
 
 ## The function used to recalculate the parameters

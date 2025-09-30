@@ -119,13 +119,14 @@ func _exit_tree() -> void:
 
 ## The function used to request an update on the fields.[br]
 ## On the first frame it might cause issues (untested) since the first old_position is Vector3() but other than that should be fine.
-func request_update() -> void:
+func request_update(complete : bool = false) -> void:
 	if !is_inside_tree():
 		return
 	# Notify the fields of an update with the previous transform
-	notify_fields_of_update(old_position,old_size)
+	notify_fields_of_update(old_position,old_size,complete)
 	# Then update it to
 	old_position = self.global_position
+	old_size = self.max_size
 
 ## The function that, when called is responsible for updating all parameters.
 func _recalculate_parameters(new_max_size : Vector3 = max_size) -> void:

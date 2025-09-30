@@ -1,9 +1,15 @@
-[gd_scene load_steps=3 format=3 uid="uid://b5wbbj34iv7fa"]
+[gd_scene load_steps=7 format=3 uid="uid://b5wbbj34iv7fa"]
 
 [ext_resource type="Script" uid="uid://x6yb1pv8gjby" path="res://addons/vector_fields/scripts/classes/custom_emitters/box_emitter.gd" id="1_h4dog"]
+[ext_resource type="Script" uid="uid://b6crlojlnll5k" path="res://addons/vector_fields/scripts/classes/VectorFieldInteractionHandler3D.gd" id="2_p3jw8"]
+[ext_resource type="Script" uid="uid://y73g5fla2gpe" path="res://addons/vector_fields/scripts/classes/VectorField3D.gd" id="2_qg3wj"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_onbu4"]
 albedo_color = Color(0.0784314, 0.129412, 0, 1)
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_7uatt"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_5wnh2"]
 
 [node name="Test3" type="Node3D"]
 
@@ -12,5 +18,26 @@ size = Vector3(20, 0.2, 20)
 material = SubResource("StandardMaterial3D_onbu4")
 
 [node name="VectorFieldBoxEmitter3D" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.71093, -3.85184)
 script = ExtResource("1_h4dog")
 metadata/_custom_type_script = "uid://x6yb1pv8gjby"
+
+[node name="VectorField3D" type="Node3D" parent="."]
+script = ExtResource("2_qg3wj")
+LOD = 2.0
+vector_field_size = Vector3i(20, 20, 20)
+metadata/_custom_type_script = "uid://y73g5fla2gpe"
+
+[node name="RigidBody3D" type="RigidBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
+
+[node name="VectorFieldInteractionHandler" type="Node" parent="RigidBody3D"]
+script = ExtResource("2_p3jw8")
+point_size_treshold = null
+metadata/_custom_type_script = "uid://b6crlojlnll5k"
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="RigidBody3D"]
+shape = SubResource("SphereShape3D_7uatt")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="RigidBody3D"]
+mesh = SubResource("SphereMesh_5wnh2")

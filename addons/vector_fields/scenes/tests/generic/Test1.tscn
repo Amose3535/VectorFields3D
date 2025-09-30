@@ -1,7 +1,9 @@
-[gd_scene load_steps=4 format=3 uid="uid://bpmlyy0s7d0t6"]
+[gd_scene load_steps=6 format=3 uid="uid://bpmlyy0s7d0t6"]
 
 [ext_resource type="Script" uid="uid://y73g5fla2gpe" path="res://addons/vector_fields/scripts/classes/VectorField3D.gd" id="2_oh6qd"]
+[ext_resource type="Script" uid="uid://x6yb1pv8gjby" path="res://addons/vector_fields/scripts/classes/custom_emitters/box_emitter.gd" id="3_l6fjr"]
 [ext_resource type="Script" uid="uid://b1y7jfjsqkfw4" path="res://addons/vector_fields/scripts/classes/custom_emitters/point_emitter.gd" id="3_oh6qd"]
+[ext_resource type="Script" uid="uid://ryeylxce5gej" path="res://addons/vector_fields/scripts/classes/custom_emitters/vortex_emitter.gd" id="4_d5c2k"]
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_an1ts"]
 radius = 0.4
@@ -16,12 +18,28 @@ mesh = SubResource("CapsuleMesh_an1ts")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.22133, -10.3328)
 script = ExtResource("2_oh6qd")
 LOD = 1.5
-vector_field_size = Vector3i(10, 10, 10)
+vector_field_size = Vector3i(30, 30, 30)
 update_zone_padding_cells = 0
 metadata/_custom_type_script = "uid://y73g5fla2gpe"
 
 [node name="VectorFieldPointEmitter3D" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.00093, 0.488171, -10.4046)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 31.5167, -1.69352, -12.0653)
 script = ExtResource("3_oh6qd")
-max_size = Vector3(9.735, 7.96, 10.795)
+max_size = Vector3(7, 7, 7)
+min_magnitude = 0.2
 metadata/_custom_type_script = "uid://b1y7jfjsqkfw4"
+
+[node name="VectorFieldBoxEmitter3D" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -27.3951, 7.48367, -8.6807)
+script = ExtResource("3_l6fjr")
+target_vector = Vector3(1, 1, 0)
+max_size = Vector3(3, 3, 3)
+metadata/_custom_type_script = "uid://x6yb1pv8gjby"
+
+[node name="VectorFieldVortexEmitter3D" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.10418, 0, -10.0109)
+script = ExtResource("4_d5c2k")
+vortex_strength = -1.0
+interaction_layer = 2
+max_size = Vector3(10, 10, 10)
+metadata/_custom_type_script = "uid://ryeylxce5gej"

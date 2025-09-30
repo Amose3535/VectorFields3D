@@ -9,13 +9,15 @@ radius = 0.4
 [node name="Test2" type="Node3D"]
 
 [node name="VectorField3D" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.157507, 1.42204)
 script = ExtResource("1_gcic0")
+LOD = 0.8
 vector_field_size = Vector3i(100, 100, 100)
 draw_debug_lines = false
 metadata/_custom_type_script = "uid://y73g5fla2gpe"
 
 [node name="VectorFieldVortexEmitter3D" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.54129, 6.7568, -1.30625)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0600882, -4.16126, -1.39278)
 script = ExtResource("2_gcic0")
 max_size = Vector3(4, 4, 4)
 metadata/_custom_type_script = "uid://ryeylxce5gej"
