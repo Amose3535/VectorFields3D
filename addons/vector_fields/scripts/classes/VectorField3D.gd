@@ -76,6 +76,9 @@ signal vf3d_updated(vf3d : VectorField3D)
 ## since the last update into extra cell padding.[br]
 ## 1.0 means 1 meter of movement results in 1 meter of cleaning safety margin.
 @export var movement_padding_factor: float = 1.0 
+## Controls how fast the dynamic padding can grow between frames (0.0 = instant, 1.0 = no growth allowed).
+## A value around 0.2-0.5 is usually good to smooth out lag spikes.
+@export_range(0.0, 1.0, 0.05) var dynamic_smoothing_factor: float = 0.4
 
 
 
@@ -85,7 +88,7 @@ signal vf3d_updated(vf3d : VectorField3D)
 	set(new_draw_state):
 		draw_debug_lines = new_draw_state
 		if Engine.is_editor_hint():
-			_redraw_mesh()
+			_redraw_mesh(draw_debug_lines,draw_vectors_only)
 
 @export var draw_vectors_only : bool = true:
 	set(new_vec_draw_state):
@@ -145,15 +148,8 @@ var vector_data : PackedVector3Array = PackedVector3Array()
 var world_size : Vector3 = Vector3(vector_field_size)*cube_edge
 ## The mesh that is responsible for drawing debug lines
 var debug_mesh : MeshInstance3D = MeshInstance3D.new()
-## The enum mapping the recomputation parameters
-enum RECOMPUTATION_STATE  {
-	## COMPLETE means that the recalculation will re-compute all vectors in the vector field
-	COMPLETE,
-	## LOCALIZED means that the recalculation will only re-compute a section of the field
-	LOCALIZED,
-	## REJECTED means that the recalculation won't happen
-	REJECTED
-}
+## The last frame's cell padding
+var last_dynamic_padding_cells: int = 0
 #endregion
 
 
@@ -374,24 +370,35 @@ func receive_emitter_update(emitter: VectorFieldBaseEmitter3D, old_info : Dictio
 		var combined_aabb = old_aabb.merge(new_aabb)
 		
 		# ----------------------------------------------------------------------
-		# DYNAMIC PADDING CALCULATION (Ghosting Fix)
+		# DYNAMIC PADDING CALCULATION & SMOOTHING (Lag Spike Prevention)
 		# ----------------------------------------------------------------------
 		
-		# Thought process: 
-		# PROBLEM:
-			# If i move an emitter too fast it might not update correctly the cells around him due 
-			# to lag spikes thanks to the partial vector field calculation
-		# SOLUTION:
-			# Since i can't access delta how i would normally do in _physics_process to expand dynamically
-			# the box to fit all the pieces that were "left behind" to be updated with the new mesh
-			# i will simply use the current and old position to see how much it moved in one frame and
-			# expand the box using that data (the greater the one frame distance, the bigger the update box)
-		# RESULT: BIG BIG performance gains (vectorfields witn 1M+ cells can still run at 60+ fps)
-		
+		# Base calculation of required dynamic padding based on movement distance.
 		var distance_traveled: float = old_pos.distance_to(new_pos)
 		var dynamic_padding_meters: float = distance_traveled * movement_padding_factor
-		var dynamic_padding_cells: int = ceil(dynamic_padding_meters / cube_edge)
-		var final_padding = max(update_zone_padding_cells, dynamic_padding_cells)
+		var target_dynamic_padding: int = ceil(dynamic_padding_meters / cube_edge)
+		
+		# Dynamic Smoothing Logic
+		var smoothed_dynamic_padding: int
+		
+		if target_dynamic_padding > last_dynamic_padding_cells:
+			# If required padding increased (due to lag spike), limit the growth using Lerp.
+			var smoothed_float = lerp(
+				float(last_dynamic_padding_cells), 
+				float(target_dynamic_padding), 
+				1.0 - dynamic_smoothing_factor # 1.0 - factor gives the speed of change (by default it would evaluate to 0.6)
+			)
+			# Round up to ensure we cover the area
+			smoothed_dynamic_padding = int(ceil(smoothed_float))
+		else:
+			# If required padding decreased, allow it to drop instantly for fast recovery.
+			smoothed_dynamic_padding = target_dynamic_padding
+			
+		# Update the state for the next frame
+		last_dynamic_padding_cells = smoothed_dynamic_padding
+		
+		# Choose the final padding: either the static minimum or the smoothed dynamic value (whichever is greater).
+		var final_padding = max(update_zone_padding_cells, smoothed_dynamic_padding)
 
 		# --- 4. Convert World AABB to Grid Indices (Vector3i) AND Apply Padding ---
 		
@@ -400,7 +407,7 @@ func receive_emitter_update(emitter: VectorFieldBaseEmitter3D, old_info : Dictio
 		var inverse_transform = global_transform.inverse()
 		var zone_aabb_local = inverse_transform * combined_aabb
 		
-		# Calculate indices (omitting float calc for brevity)
+		# Calculate indices and apply final_padding simultaneously
 		var min_index_float = (zone_aabb_local.position - field_origin_local) / cube_edge_local
 		var start_x = max(0, int(floor(min_index_float.x)) - final_padding)
 		var start_y = max(0, int(floor(min_index_float.y)) - final_padding)
@@ -419,16 +426,17 @@ func receive_emitter_update(emitter: VectorFieldBaseEmitter3D, old_info : Dictio
 		# ----------------------------------------------------------------------
 		# Calculate the number of cells in the updated region (end is exclusive)
 		updated_cells = (end_x - start_x) * (end_y - start_y) * (end_z - start_z)
-
+		updated_cells = max(0.0,updated_cells)
 		# 5. Execute optimized recalculation in the combined index box
 		_recalculate_vectors_in_box(start_index, end_index)
 	
 	# Update debug mesh
-	if Engine.is_editor_hint():
+	if Engine.is_editor_hint() and draw_debug_lines:
+		# This should ideally be replaced by a throttled update or partial mesh update
 		_redraw_mesh(draw_debug_lines, draw_vectors_only)
-
+	
 	# ---  FINAL PERFORMANCE PRINT ---
-	if metrics_enabled:
+	if metrics_enabled: 
 		var percentage = float(updated_cells) / total_cells * 100.0
 		print(
 			"[VF3D Metrics] | Updated Cells: %d | Total Cells: %d | Recalc %%: %.2f%%" 
