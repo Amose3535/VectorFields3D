@@ -1,10 +1,10 @@
-RigidBody3D
+MeshInstance3D
+VectorField3D
 VectorFieldPointEmitter3D
 VectorFieldVortexEmitter3D
+VectorFieldBoxEmitter3D
+RigidBody3D
 CSGBox3D
 VectorFieldInteractionHandler3D
-VectorFieldBoxEmitter3D
-VectorField3D
-MeshInstance3D
 VectorFieldBaseEmitter3D
 Camera3D

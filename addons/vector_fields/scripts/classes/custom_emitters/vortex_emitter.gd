@@ -9,26 +9,28 @@ class_name VectorFieldVortexEmitter3D
 @export var vortex_strength: float = 1.0:
 	set(new_strength):
 		vortex_strength = new_strength
-		notify_fields_of_update()
+		request_update()
 		
 ## The axis around which the vortex rotation occurs.
 @export var rotation_axis: Vector3 = Vector3.UP:
 	set(new_axis):
 		# Normalize the axis to ensure it's a unit vector
 		rotation_axis = new_axis.normalized()
-		notify_fields_of_update()
+		request_update()
 		
 ## Determines how the force decays with distance: true for Inverse Square (1/r^2), 
 ## false for Linear decay (1/r).
 @export var inverse_square_decay: bool = true:
 	set(new_decay):
 		inverse_square_decay = new_decay
-		notify_fields_of_update()
+		request_update()
 #endregion
 
 
 ## Override the inherited function to define the vortex behavior.
 func get_vector_at_position(vector_pos : Vector3) -> Vector3:
+	if !is_inside_tree():
+		return Vector3.ZERO
 	# NEW: Use the emitter's world_size to define the bounds (AABB check)
 	var half_size = world_size / 2.0
 	var emitter_aabb = AABB(global_position - half_size, world_size)

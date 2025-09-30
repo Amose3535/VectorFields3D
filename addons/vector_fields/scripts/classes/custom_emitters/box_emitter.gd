@@ -10,7 +10,7 @@ class_name VectorFieldBoxEmitter3D
 	set(new_vector):
 		target_vector = new_vector
 		# Notifiy the fields that an update occurred
-		notify_fields_of_update()
+		request_update()
 #endregion
 
 # NOTE: The max_distance property inherited from the base class is not strictly
@@ -24,6 +24,8 @@ class_name VectorFieldBoxEmitter3D
 
 ## Override the inherited function to define the box's force field behavior.
 func get_vector_at_position(vector_pos : Vector3) -> Vector3:
+	if !is_inside_tree():
+		return Vector3.ZERO
 	# 1. Calcoliamo la mezza dimensione (half_size) per centrare la scatola attorno a global_position.
 	var half_size = world_size / 2.0
 	

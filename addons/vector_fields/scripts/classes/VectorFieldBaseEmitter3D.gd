@@ -14,14 +14,14 @@ class_name VectorFieldBaseEmitter3D
 @export_flags_3d_physics var interaction_layer = 1:
 	set(new_interaction_layer):
 		interaction_layer=new_interaction_layer
-		notify_fields_of_update()
+		request_update()
 		
 ## The maximum world size of the emitter's influence zone (the Bounding Box for force contribution).
 @export var max_size : Vector3 = Vector3.ONE * 2.0: # Default size for a 2x2x2 box
 	set(new_size):
 		max_size = new_size.abs() # Ensure no negative values
 		_recalculate_parameters(max_size)
-		notify_fields_of_update()
+		request_update()
 		if Engine.is_editor_hint():
 			_redraw_mesh()
 
@@ -31,7 +31,7 @@ class_name VectorFieldBaseEmitter3D
 @export var min_magnitude: float = 0.0:
 	set(new_magnitude):
 		min_magnitude = max(0.0, new_magnitude) # Ensures the value is not negative
-		notify_fields_of_update()
+		request_update()
 
 @export_group("Debugging")
 @export var draw_debug_lines : bool = true:
@@ -53,6 +53,10 @@ const EMITTER_GROUP : StringName = &"VectorFieldEmitters3D"
 var world_size : Vector3 = max_size
 ## The MeshInstance that is responsible for displaying the debug lines
 var debug_mesh : MeshInstance3D = MeshInstance3D.new()
+## The position previously used by the notification function
+var old_position : Vector3 = Vector3()
+## The world size previously used by the notification function
+var old_size : Vector3 = Vector3()
 #endregion
 
 ## VectorFieldBaseEmitter's _ready() function.[br]NOTE: Remember to always add 'super._ready()' at the top of your ready function if you plan on using it in a child script.
@@ -79,16 +83,44 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	match what:
 		NOTIFICATION_TRANSFORM_CHANGED:
-			notify_fields_of_update()
+			var reset_rot_or_scale : bool = false
+			# If the rotation and scale are already reset there's no need to set them
+			if self.rotation != Vector3(0,0,0) || self.scale != Vector3(1,1,1):
+				reset_rot_or_scale = true
+			
+			# If i need to reset the rotation or scale, do that
+			if reset_rot_or_scale:
+				print("[VectorFieldBaseEmitter3D] Vector field emitters can't be rotated or scaled.")
+				# Get the current transform
+				var current_transform = self.transform
+				# Orthonormalize it and reset its basis
+				current_transform = current_transform.orthonormalized()
+				current_transform.basis = Basis() # (Reset rotation and scale to (1,1,1) )
+				# Finally replace self.transform with the fixed one
+				self.transform = current_transform
+			# Otherwise...
+			else:
+				# Notify fields of an update and update old transform variable (only when necessary: not when trying to rotate)
+				request_update()
+
 
 func _enter_tree() -> void:
-	notify_fields_of_update()
+	notify_fields_of_update(self.global_position, self.world_size)
 
 func _exit_tree() -> void:
-	notify_fields_of_update()
+	notify_fields_of_update(self.global_position, self.world_size)
 
 
 #region INTERNAL FUNCTIONS
+
+## The function used to request an update on the fields.[br]
+## On the first frame it might cause issues (untested) since the first old_position is Vector3() but other than that should be fine.
+func request_update() -> void:
+	# Notify the fields of an update with the previous transform
+	notify_fields_of_update(old_position,old_size)
+	# Then update it to
+	old_position = self.global_position
+
 ## The function that, when called is responsible for updating all parameters.
 func _recalculate_parameters(new_max_size : Vector3 = max_size) -> void:
 	world_size = new_max_size
@@ -99,18 +131,20 @@ func get_vector_at_position(vector_pos : Vector3) -> Vector3:
 	return Vector3.ZERO
 
 ## Public Function to tell the fields an update occurred
-func notify_fields_of_update() -> void:
+func notify_fields_of_update(pre_notification_pos : Vector3, pre_notification_world_size : Vector3) -> void:
 	# Get the group name from the other class (assuming VectorField3D is known via autoload or script)
 	const VF_GROUP = &"VectorFields3D" 
+	
+	var old_info = {"global_position":pre_notification_pos,"world_size":pre_notification_world_size}
 	
 	if not is_inside_tree():
 		return
 	if Engine.is_editor_hint():
 		# Deferred mode call
-		get_tree().call_group_flags(SceneTree.GROUP_CALL_DEFERRED, VF_GROUP, &"receive_emitter_update", self)
+		get_tree().call_group_flags(SceneTree.GROUP_CALL_DEFERRED, VF_GROUP, &"receive_emitter_update", self, old_info)
 	else:
 		# Direct call
-		get_tree().call_group(VF_GROUP, &"receive_emitter_update", self)
+		get_tree().call_group(VF_GROUP, &"receive_emitter_update", self, old_info)
 #endregion
 
 

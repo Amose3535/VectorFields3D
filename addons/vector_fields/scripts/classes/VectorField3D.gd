@@ -7,11 +7,25 @@ class_name VectorField3D
 ##
 ## A VectorField3D represents a region of space split into a three-dimensional grid in which each grid cell acts as the fundamental region of forces in that space.[br]To put it simply: Each cell contains the result of the contribute of all forces in that section of space.
 
+
+
 #region signals
 signal vf3d_entered_group(vf3d : VectorField3D)
 signal vf3d_exited_group(vf3d : VectorField3D)
 signal vf3d_updated(vf3d : VectorField3D)
 #endregion
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -26,7 +40,6 @@ signal vf3d_updated(vf3d : VectorField3D)
 		emit_signal(&"vf3d_updated",new_lod)
 		if Engine.is_editor_hint():
 			_redraw_mesh(draw_debug_lines,draw_vectors_only)
-			
 
 ## vector_field_size is the amount of LOD cubes each side of your VectorField3D has.[br]Example: if LOD = l and vector_field_size = (x,y,z) means i'll have a parallelepiped of dimensions (x,y,z)*(1/l) meters.
 @export var vector_field_size : Vector3i = Vector3i(1,1,1):
@@ -53,6 +66,19 @@ signal vf3d_updated(vf3d : VectorField3D)
 ## InteractionLayer is the layer that defines the interaction between emitters and fields. Only emitters on the same laer as another field will be able to affect its vectors. 
 @export_flags_3d_physics var interaction_layer = 1
 
+
+
+@export_group("Optimization")
+## Extra padding, in *cells*, added to the emitter's calculated update zone (combined AABB).[br]
+## to clean up potential lag/ghosting vectors left behind during stutters.
+@export_range(0, 10, 1) var update_zone_padding_cells: int = 1 
+## The factor used to convert the distance traveled by the emitter
+## since the last update into extra cell padding.[br]
+## 1.0 means 1 meter of movement results in 1 meter of cleaning safety margin.
+@export var movement_padding_factor: float = 1.0 
+
+
+
 @export_group("Debugging")
 ## Allows to draw or not the debug lines
 @export var draw_debug_lines : bool = true:
@@ -61,7 +87,7 @@ signal vf3d_updated(vf3d : VectorField3D)
 		if Engine.is_editor_hint():
 			_redraw_mesh()
 
-@export var draw_vectors_only : bool = false:
+@export var draw_vectors_only : bool = true:
 	set(new_vec_draw_state):
 		draw_vectors_only = new_vec_draw_state
 		if Engine.is_editor_hint():
@@ -84,7 +110,27 @@ signal vf3d_updated(vf3d : VectorField3D)
 		vector_color = new_color
 		if Engine.is_editor_hint():
 			_redraw_mesh(draw_debug_lines,draw_vectors_only)
+
+@export var metrics_enabled : bool = false:
+	set(new_state):
+		metrics_enabled = new_state
+
+@export var show_warnings : bool = false:
+	set(new_state):
+		show_warnings = new_state
 #endregion
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -99,7 +145,28 @@ var vector_data : PackedVector3Array = PackedVector3Array()
 var world_size : Vector3 = Vector3(vector_field_size)*cube_edge
 ## The mesh that is responsible for drawing debug lines
 var debug_mesh : MeshInstance3D = MeshInstance3D.new()
+## The enum mapping the recomputation parameters
+enum RECOMPUTATION_STATE  {
+	## COMPLETE means that the recalculation will re-compute all vectors in the vector field
+	COMPLETE,
+	## LOCALIZED means that the recalculation will only re-compute a section of the field
+	LOCALIZED,
+	## REJECTED means that the recalculation won't happen
+	REJECTED
+}
 #endregion
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -133,13 +200,70 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	match what:
 		NOTIFICATION_TRANSFORM_CHANGED:
-			receive_emitter_update(VectorFieldBaseEmitter3D.new())
+			var reset_rot_or_scale : bool = false
+			# If the rotation and scale are already reset there's no need to set them
+			if self.rotation != Vector3(0,0,0) || self.scale != Vector3(1,1,1):
+				reset_rot_or_scale = true
+			
+			# If i need to reset the rotation or scale, do that
+			if reset_rot_or_scale:
+				if show_warnings:
+					print("[VectorField3D] Vector fields can't be rotated or scaled.")
+				# Get the current transform
+				var current_transform = self.transform
+				# Orthonormalize it and reset its basis
+				current_transform = current_transform.orthonormalized()
+				current_transform.basis = Basis() # (Reset rotation and scale to (1,1,1) )
+				# Finally replace self.transform with the fixed one
+				self.transform = current_transform
+			# Otherwise...
+			else:
+				# Notify fields of an update and update old transform variable (only when necessary: not when trying to rotate)
+				receive_emitter_update(VectorFieldBaseEmitter3D.new(),{},true)
 
 # Called when the node is about to get deleted from tree
 func _exit_tree() -> void:
 	emit_signal(&"vf3d_exited_group",self)
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #region INTERNAL FUNCTIONS
+
+
+
+## Function used to add a value to a cell with coordinates x, y, z using my vector_data 1D array
+func _add_to_cell(pos : Vector3i, value : Vector3) -> void:
+	if pos.x < vector_field_size.x && pos.y < vector_field_size.y && pos.z < vector_field_size.z:
+		vector_data[pos.x+(pos.y*vector_field_size.x)+(pos.z*vector_field_size.x*vector_field_size.y)] += value
+
+## Function used to set a value on a cell with coordinates x, y, z using my vector_data 1D array
+func _set_cell(pos : Vector3i, value : Vector3) -> void:
+	if pos.x < vector_field_size.x && pos.y < vector_field_size.y && pos.z < vector_field_size.z:
+		vector_data[pos.x+(pos.y*vector_field_size.x)+(pos.z*vector_field_size.x*vector_field_size.y)] = value
+
+## Function used to get the data inside a cell with coordinates x, y, z using my vector_data 1D array
+func _get_cell(pos: Vector3i) -> Vector3:
+	if pos.x < vector_field_size.x && pos.y < vector_field_size.y && pos.z < vector_field_size.z:
+		return vector_data[pos.x+(pos.y*vector_field_size.x)+(pos.z*vector_field_size.x*vector_field_size.y)]
+	else:
+		return Vector3.ZERO
+
+
+
+
 ## The function used to recalculate the parameters
 func _recalculate_parameters(new_lod=LOD, new_vector_field_size=vector_field_size):
 	cube_edge = 1.0 / float(new_lod)
@@ -199,7 +323,7 @@ func _compute_field_vectors() -> void:
 		if (emitter.interaction_layer & self.interaction_layer) == 0: # Bit-wise and comparison
 			continue # No layer in common: skip to next iteration
 			
-		# 🛑 MODIFICA CRUCIALE: Usiamo la dimensione vettoriale (world_size) dell'emitter per l'AABB
+		# Use emitter's world_size for AABB
 		var emitter_world_size: Vector3 = (emitter as VectorFieldBaseEmitter3D).world_size
 		var emitter_aabb = AABB(emitter.global_position - emitter_world_size / 2.0, emitter_world_size)
 		# Se l'AABB dell'emitter e l'AABB del Field non si intersecano, salta
@@ -219,106 +343,162 @@ func _compute_field_vectors() -> void:
 			# Add contribution to vector_data
 			_add_to_cell(Vector3i(x,y,z),contribution)
 
-## Function used to add a value to a cell with coordinates x, y, z using my vector_data 1D array
-func _add_to_cell(pos : Vector3i, value : Vector3) -> void:
-	vector_data[pos.x+(pos.y*vector_field_size.x)+(pos.z*vector_field_size.x*vector_field_size.y)] += value
-
-## Function used to set a value on a cell with coordinates x, y, z using my vector_data 1D array
-func _set_cell(pos : Vector3i, value : Vector3) -> void:
-	vector_data[pos.x+(pos.y*vector_field_size.x)+(pos.z*vector_field_size.x*vector_field_size.y)] = value
-
-## Function used to get the data inside a cell with coordinates x, y, z using my vector_data 1D array
-func _get_cell(pos: Vector3i) -> Vector3:
-	return vector_data[pos.x+(pos.y*vector_field_size.x)+(pos.z*vector_field_size.x*vector_field_size.y)]
-
 ## This function gets called through get_tree().call_group(...)
-func receive_emitter_update(emitter: VectorFieldBaseEmitter3D) -> void:
-	# Controlli di validità
+func receive_emitter_update(emitter: VectorFieldBaseEmitter3D, old_info : Dictionary, force : bool = false) -> void:
+	# Validity control
 	if not is_instance_valid(self) or not is_instance_valid(emitter):
 		return
-		
-	print("[Field] Ricevuto aggiornamento da Emitter! -> FORZATURA RICALCOLO COMPLETO")
-		
-	# 1. Complete recomputation of vectors
-	_compute_field_vectors()
 	
+	# --- Performance Metrics Setup ---
+	var total_cells: int = vector_field_size.x * vector_field_size.y * vector_field_size.z
+	var updated_cells: int = total_cells # Initialize with total, will be overridden if not 'force'
+
+	# If the update is forced (like from the field itself getting moved or something else) just recompute all vectors
+	if force:
+		# If the field is moved, all vectors must be recalculated
+		_compute_field_vectors()
+	else:
+		# --- Optimized recalculation (LOCALIZED) ---
+		
+		# 1. Get old information (Zone A) and new information (Zone B)
+		var old_pos: Vector3 = old_info.get("global_position", emitter.global_position)
+		var old_size: Vector3 = old_info.get("world_size", emitter.world_size)
+		var new_pos: Vector3 = emitter.global_position
+		var new_size: Vector3 = emitter.world_size
+		
+		# 2. Compute the AABBs in World Space
+		var old_aabb = AABB(old_pos - old_size / 2.0, old_size)
+		var new_aabb = AABB(new_pos - new_size / 2.0, new_size)
+		
+		# 3. Merge the two AABBs to get the minimal combined area (World Space)
+		var combined_aabb = old_aabb.merge(new_aabb)
+		
+		# ----------------------------------------------------------------------
+		# DYNAMIC PADDING CALCULATION (Ghosting Fix)
+		# ----------------------------------------------------------------------
+		
+		# Thought process: 
+		# PROBLEM:
+			# If i move an emitter too fast it might not update correctly the cells around him due 
+			# to lag spikes thanks to the partial vector field calculation
+		# SOLUTION:
+			# Since i can't access delta how i would normally do in _physics_process to expand dynamically
+			# the box to fit all the pieces that were "left behind" to be updated with the new mesh
+			# i will simply use the current and old position to see how much it moved in one frame and
+			# expand the box using that data (the greater the one frame distance, the bigger the update box)
+		# RESULT: BIG BIG performance gains (vectorfields witn 1M+ cells can still run at 60+ fps)
+		
+		var distance_traveled: float = old_pos.distance_to(new_pos)
+		var dynamic_padding_meters: float = distance_traveled * movement_padding_factor
+		var dynamic_padding_cells: int = ceil(dynamic_padding_meters / cube_edge)
+		var final_padding = max(update_zone_padding_cells, dynamic_padding_cells)
+
+		# --- 4. Convert World AABB to Grid Indices (Vector3i) AND Apply Padding ---
+		
+		var cube_edge_local = cube_edge
+		var field_origin_local = -world_size / 2.0
+		var inverse_transform = global_transform.inverse()
+		var zone_aabb_local = inverse_transform * combined_aabb
+		
+		# Calculate indices (omitting float calc for brevity)
+		var min_index_float = (zone_aabb_local.position - field_origin_local) / cube_edge_local
+		var start_x = max(0, int(floor(min_index_float.x)) - final_padding)
+		var start_y = max(0, int(floor(min_index_float.y)) - final_padding)
+		var start_z = max(0, int(floor(min_index_float.z)) - final_padding)
+		
+		var max_index_float = (zone_aabb_local.position + zone_aabb_local.size - field_origin_local) / cube_edge_local
+		var end_x = min(vector_field_size.x, int(ceil(max_index_float.x)) + final_padding)
+		var end_y = min(vector_field_size.y, int(ceil(max_index_float.y)) + final_padding)
+		var end_z = min(vector_field_size.z, int(ceil(max_index_float.z)) + final_padding)
+		
+		var start_index = Vector3i(start_x, start_y, start_z)
+		var end_index = Vector3i(end_x, end_y, end_z)
+		
+		# ----------------------------------------------------------------------
+		#  PERFORMANCE METRICS CALCULATION
+		# ----------------------------------------------------------------------
+		# Calculate the number of cells in the updated region (end is exclusive)
+		updated_cells = (end_x - start_x) * (end_y - start_y) * (end_z - start_z)
+
+		# 5. Execute optimized recalculation in the combined index box
+		_recalculate_vectors_in_box(start_index, end_index)
 	
-	# 3. Update the debug mesh
+	# Update debug mesh
 	if Engine.is_editor_hint():
 		_redraw_mesh(draw_debug_lines, draw_vectors_only)
 
-## Recalculates the vector contributions only within the specified global AABB (zone_aabb).
+	# ---  FINAL PERFORMANCE PRINT ---
+	if metrics_enabled:
+		var percentage = float(updated_cells) / total_cells * 100.0
+		print(
+			"[VF3D Metrics] | Updated Cells: %d | Total Cells: %d | Recalc %%: %.2f%%" 
+			% [updated_cells, total_cells, percentage]
+		)
+	
+	# Emit signal for user utilization
+	emit_signal(&"vf3d_updated", self)
+
+
+## Recalculates the vector contributions only within the specified box with bounds set from start-end.
 ## This is the core of the performance optimization.
-func _recalculate_vectors_in_zone(zone_aabb: AABB) -> void:	
+func _recalculate_vectors_in_box(start: Vector3i, end: Vector3i) -> void:
+	if !is_inside_tree():
+		return
+	# 1. Ensure start <= end for all components (handle arbitrary box selection)
+	if start.x > end.x: var temp : int = start.x; start.x = end.x; end.x = temp;
+	if start.y > end.y: var temp : int = start.y; start.y = end.y; end.y = temp;
+	if start.z > end.z: var temp : int = start.z; start.z = end.z; end.z = temp;
+	
+	# --- Local Parameters Setup ---
 	var cube_edge_local = cube_edge
-	var field_origin_local = -world_size / 2.0
+	var cube_edge_half = cube_edge_local / 2.0
+	# The local origin (corner -half_world_size) used for coordinate mapping
+	var field_origin_local = -world_size / 2.0 
 	
-	# --- 1. Map Global AABB to Local Grid Indices ---
-	
-	# Convert Global AABB to Local AABB
-	var inverse_transform = global_transform.inverse()
-	var zone_aabb_local = inverse_transform * zone_aabb
-	
-	# Calculate start index (clamp to field size)
-	var min_index_float = (zone_aabb_local.position - field_origin_local) / cube_edge_local
-	var start_x = max(0, int(floor(min_index_float.x)))
-	var start_y = max(0, int(floor(min_index_float.y)))
-	var start_z = max(0, int(floor(min_index_float.z)))
-	
-	# Calculate end index (clamp to field size)
-	var max_index_float = (zone_aabb_local.position + zone_aabb_local.size - field_origin_local) / cube_edge_local
-	var end_x = min(vector_field_size.x, int(ceil(max_index_float.x)))
-	var end_y = min(vector_field_size.y, int(ceil(max_index_float.y)))
-	var end_z = min(vector_field_size.z, int(ceil(max_index_float.z)))
-	
-	
-	# --- 2. Pre-filter Emitters (same logic as _compute_field_vectors) ---
+	# 2. Pre-filter Emitters (Optimization: Check intersection only once)
 	var all_emitters = get_tree().get_nodes_in_group(VectorFieldBaseEmitter3D.EMITTER_GROUP)
 	var field_aabb = AABB(global_transform.origin - world_size/2.0, world_size)
 	var relevant_emitters = []
 	
 	for emitter in all_emitters:
-		# Use the same three-way filter (Type, Layer, Field AABB intersection)
+		# Filter 1: Type check
 		if not emitter is VectorFieldBaseEmitter3D: continue
+		# Filter 2: Layer check (Bit-wise AND comparison)
 		if (emitter.interaction_layer & self.interaction_layer) == 0: continue
 		
-		# 🛑 MODIFICA CRUCIALE: Usiamo la dimensione vettoriale (world_size) dell'emitter per l'AABB
+		# Filter 3: AABB intersection check
 		var emitter_world_size: Vector3 = (emitter as VectorFieldBaseEmitter3D).world_size
 		var emitter_aabb = AABB(emitter.global_position - emitter_world_size / 2.0, emitter_world_size)
 		
 		if not field_aabb.intersects(emitter_aabb): continue
 		
 		relevant_emitters.append(emitter)
+	# ----------------------------------------------------
 	
-	
-	# --- 3. Localized Recalculation Loop ---
-	var cube_edge_half = cube_edge_local / 2.0
-	
-	# Loop only over the calculated indices
-	for x in range(start_x, end_x):
-		for y in range(start_y, end_y):
-			for z in range(start_z, end_z):
-				
+	# 3. Localized Recalculation Loop
+	for x in range(start.x, end.x):
+		for y in range(start.y, end.y):
+			for z in range(start.z, end.z):
 				# Reset cell vector to ZERO for a fresh recalculation of ALL relevant emitters
 				var net_vector = Vector3.ZERO
 				
-				# Calculate the global position of the cell center
+				# Calculate the global position of the cell center (Index -> Global Pos)
 				var cell_local_center = field_origin_local + Vector3(x, y, z) * cube_edge_local + Vector3.ONE * cube_edge_half
-				var cell_global_pos = global_transform * cell_local_center
+				var cell_global_pos : Vector3 = global_transform * cell_local_center
 				
 				# Calculate contribution from ALL relevant emitters for this cell
 				for emitter in relevant_emitters:
-					# 🛑 RIMOZIONE LOGICA SFERICA
-					# Dato che l'AABB è già stato controllato, non facciamo un controllo sferico aggiuntivo,
-					# ma ci affidiamo alla logica AABB-based di get_vector_at_position (che farà il check AABB)
 					net_vector += (emitter as VectorFieldBaseEmitter3D).get_vector_at_position(cell_global_pos)
-						
+				
+				# Set the final net vector for the cell
 				_set_cell(Vector3i(x,y,z),net_vector)
 
 ## Public function used to get the force vector at the specified global position.[br]
 ## Returns Vector3.ZERO if the point is outside the VectorField's Bounding Box.[br]
 ## This is what allows for the actual real usage of the VectorField3D.
 func get_vector_at_global_position(global_pos: Vector3) -> Vector3:
+	if !is_inside_tree():
+		return Vector3()
 	# 1. Calculate the Field's global Bounding Box (AABB)
 	var half_world_size: Vector3 = world_size / 2.0
 	var field_global_center: Vector3 = global_position
@@ -361,6 +541,19 @@ func get_vector_at_global_position(global_pos: Vector3) -> Vector3:
 	# Fallback, just in case (though highly unlikely after the AABB check)
 	return Vector3.ZERO
 #endregion
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 #region DebugMesh functions

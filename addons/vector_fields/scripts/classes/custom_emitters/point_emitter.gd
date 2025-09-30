@@ -9,14 +9,14 @@ class_name VectorFieldPointEmitter3D
 @export var power: float = 1.0:
 	set(new_power):
 		power = new_power
-		notify_fields_of_update()
+		request_update()
 		
 ## Determines how the force decays with distance: true for Inverse Square (1/r^2), 
 ## false for Linear decay (1/r).
 @export var inverse_square_decay: bool = true:
 	set(new_decay):
 		inverse_square_decay = new_decay
-		notify_fields_of_update()
+		request_update()
 #endregion
 
 # NOTE: max_distance from the base class is used here to define the limit of the force, 
@@ -24,7 +24,8 @@ class_name VectorFieldPointEmitter3D
 
 ## Override the inherited function to define the point source behavior.
 func get_vector_at_position(vector_pos : Vector3) -> Vector3:
-	
+	if !is_inside_tree():
+		return Vector3.ZERO
 	# NEW: Use the emitter's world_size to define the bounds (AABB check)
 	var half_size = world_size / 2.0
 	var emitter_aabb = AABB(global_position - half_size, world_size)
