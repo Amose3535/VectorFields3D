@@ -1,5 +1,5 @@
 ea4bc82a6ad023ab7ee23ee620429895
-::res://::1759229390
+::res://::1759229563
 icon.svg::CompressedTexture2D/CompressedTexture2D::7018032084748950146::1758793076::1759139952::1::::<><><>0<>0<>edab2a1ee3d499e3e1d21f1b91ea60a4<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
 README.md::TextFile/TextFile::-1::1758793076::0::1::::<><><>0<>0<><>::
 ::res://addons/::1758793076
@@ -16,9 +16,9 @@ VectorFieldInteractionHandler3DIcon.svg::CompressedTexture2D/CompressedTexture2D
 ::res://addons/vector_fields/scenes/tests/::1759070092
 ::res://addons/vector_fields/scenes/tests/Emitters3Dtests/::1759070092
 vector_field_base_emitter_3D_test.tscn::PackedScene/PackedScene::8456052665970032366::1759070092::0::1::::<><><>0<>0<><>::uid://bg2mrl7hbkop0::::res://addons/vector_fields/scripts/classes/VectorFieldBaseEmitter3D.gd
-::res://addons/vector_fields/scenes/tests/generic/::1759229025
-Test1.tscn::PackedScene::3464737917327714465::1759229025::0::1::::<><><>0<>0<><>::uid://y73g5fla2gpe::::res://addons/vector_fields/scripts/classes/VectorField3D.gd<>uid://b1y7jfjsqkfw4::::res://addons/vector_fields/scripts/classes/custom_emitters/point_emitter.gd
-Test2.tscn::PackedScene/PackedScene::5782674076585180878::1759228887::0::1::::<><><>0<>0<><>::uid://y73g5fla2gpe::::res://addons/vector_fields/scripts/classes/VectorField3D.gd<>uid://ryeylxce5gej::::res://addons/vector_fields/scripts/classes/custom_emitters/vortex_emitter.gd
+::res://addons/vector_fields/scenes/tests/generic/::1759229536
+Test1.tscn::PackedScene::3464737917327714465::1759229536::0::1::::<><><>0<>0<><>::uid://y73g5fla2gpe::::res://addons/vector_fields/scripts/classes/VectorField3D.gd<>uid://b1y7jfjsqkfw4::::res://addons/vector_fields/scripts/classes/custom_emitters/point_emitter.gd
+Test2.tscn::PackedScene::5782674076585180878::1759229467::0::1::::<><><>0<>0<><>::uid://y73g5fla2gpe::::res://addons/vector_fields/scripts/classes/VectorField3D.gd<>uid://ryeylxce5gej::::res://addons/vector_fields/scripts/classes/custom_emitters/vortex_emitter.gd
 Test3.tscn::PackedScene/PackedScene::4537565323503914482::1759228784::0::1::::<><><>0<>0<><>::uid://x6yb1pv8gjby::::res://addons/vector_fields/scripts/classes/custom_emitters/box_emitter.gd
 ::res://addons/vector_fields/scenes/tests/VectorField3Dtests/::1759070092
 vector_field_3d_test.tscn::PackedScene/PackedScene::188856468413057844::1759070092::0::1::::<><><>0<>0<><>::uid://y73g5fla2gpe::::res://addons/vector_fields/scripts/classes/VectorField3D.gd
@@ -26,9 +26,9 @@ vector_field_3d_test.tscn::PackedScene/PackedScene::188856468413057844::17590700
 DebugDraw.tscn::PackedScene/PackedScene::9091890676060857439::1758793076::0::1::::<><><>0<>0<><>::uid://c8enulbrwcnrv::::res://addons/vector_fields/scripts/utils/DebugDraw.gd
 study_material.tres::StandardMaterial3D/StandardMaterial3D::405314003583485805::1759070092::0::1::::<><><>0<>0<><>::
 ::res://addons/vector_fields/scripts/::1758793076
-::res://addons/vector_fields/scripts/classes/::1759229371
+::res://addons/vector_fields/scripts/classes/::1759229458
 VectorField3D.gd::GDScript/GDScript::1752304709928965138::1759227901::0::1::::VectorField3D<>Node3D<>res://addons/vector_fields/assets/images/VectorField3DIcon/VectorField3DIcon.svg<>0<>1<><>::
-VectorFieldBaseEmitter3D.gd::GDScript::2864051534800877071::1759229371::0::1::::VectorFieldBaseEmitter3D<>Node3D<><>0<>1<><>::
+VectorFieldBaseEmitter3D.gd::GDScript::2864051534800877071::1759229458::0::1::::VectorFieldBaseEmitter3D<>Node3D<><>0<>1<><>::
 VectorFieldInteractionHandler3D.gd::GDScript/GDScript::4567456174337958138::1759139901::0::1::::VectorFieldInteractionHandler3D<>Node<>res://addons/vector_fields/assets/images/VectorFieldInteractionHandler3DIcon/VectorFieldInteractionHandler3DIcon.svg<>0<>1<><>::
 ::res://addons/vector_fields/scripts/classes/custom_emitters/::1759220389
 box_emitter.gd::GDScript/GDScript::1679799497448557182::1759220389::0::1::::VectorFieldBoxEmitter3D<>VectorFieldBaseEmitter3D<><>0<>1<><>::

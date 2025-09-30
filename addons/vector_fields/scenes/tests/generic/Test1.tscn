@@ -21,7 +21,7 @@ update_zone_padding_cells = 0
 metadata/_custom_type_script = "uid://y73g5fla2gpe"
 
 [node name="VectorFieldPointEmitter3D" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.00093, 1.24491, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.00093, 0.488171, -10.4046)
 script = ExtResource("3_oh6qd")
 max_size = Vector3(9.735, 7.96, 10.795)
 metadata/_custom_type_script = "uid://b1y7jfjsqkfw4"
