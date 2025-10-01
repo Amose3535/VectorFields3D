@@ -11,35 +11,34 @@ radius = 0.4
 [node name="Test1" type="Node3D"]
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.52189, 0, 0)
 mesh = SubResource("CapsuleMesh_an1ts")
 
 [node name="VectorField3D" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.22133, -10.3328)
 script = ExtResource("2_oh6qd")
-LOD = 1.5
+LOD = 1.2
 vector_field_size = Vector3i(30, 30, 30)
 update_zone_padding_cells = 0
+draw_debug_lines = false
+metrics_enabled = true
 metadata/_custom_type_script = "uid://y73g5fla2gpe"
 
 [node name="VectorFieldPointEmitter3D" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 31.5167, -1.69352, -12.0653)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 31.5167, -1.69352, -38.3189)
 script = ExtResource("3_oh6qd")
 max_size = Vector3(7, 7, 7)
 min_magnitude = 0.2
 metadata/_custom_type_script = "uid://b1y7jfjsqkfw4"
 
 [node name="VectorFieldBoxEmitter3D" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -27.3951, 7.48367, -8.6807)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -27.3951, 7.48367, -34.9343)
 script = ExtResource("3_l6fjr")
 target_vector = Vector3(1, 1, 0)
 max_size = Vector3(3, 3, 3)
 metadata/_custom_type_script = "uid://x6yb1pv8gjby"
 
 [node name="VectorFieldVortexEmitter3D" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.10418, 0, -10.0109)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.577778, -2.34963)
 script = ExtResource("4_d5c2k")
 vortex_strength = -1.0
-interaction_layer = 2
-max_size = Vector3(10, 10, 10)
+max_size = Vector3(7, 7, 7)
 metadata/_custom_type_script = "uid://ryeylxce5gej"

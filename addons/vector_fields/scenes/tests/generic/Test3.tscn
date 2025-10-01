@@ -33,7 +33,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
 
 [node name="VectorFieldInteractionHandler" type="Node" parent="RigidBody3D"]
 script = ExtResource("2_p3jw8")
-point_size_treshold = null
 metadata/_custom_type_script = "uid://b6crlojlnll5k"
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="RigidBody3D"]
