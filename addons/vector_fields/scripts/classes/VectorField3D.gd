@@ -36,7 +36,7 @@ signal vf3d_updated(vf3d : VectorField3D)
 		LOD = new_lod
 		_recalculate_parameters(new_lod, vector_field_size)
 		_compute_field_vectors()
-		_update_gpu_texture() # NEW: Update GPU texture when resolution changes
+		_update_gpu_particles_texture() # NEW: Update GPU texture when resolution changes
 		emit_signal(&"vf3d_updated",new_lod)
 		if Engine.is_editor_hint():
 			_redraw_mesh(draw_debug_lines,draw_vectors_only)
@@ -53,7 +53,7 @@ signal vf3d_updated(vf3d : VectorField3D)
 		# AFTER validating the new_field_size, set every internal variable
 		_recalculate_parameters(LOD, new_field_size)
 		_compute_field_vectors()
-		_update_gpu_texture() # NEW: Update GPU texture when resolution changes
+		_update_gpu_particles_texture() # NEW: Update GPU texture when resolution changes
 		emit_signal(&"vf3d_updated",new_field_size)
 		if Engine.is_editor_hint():
 			_redraw_mesh(draw_debug_lines,draw_vectors_only)
@@ -173,7 +173,6 @@ var debug_mesh : MeshInstance3D = MeshInstance3D.new()
 ## The last frame's cell padding
 var last_dynamic_padding_cells: int = 0
 
-# NEW: GPU Attractor Internals
 var gpu_attractor: GPUParticlesAttractorVectorField3D = null
 var vector_texture: ImageTexture3D = null
 var current_texture_resolution: Vector3i = Vector3i.ZERO # To track the actual resolution used by the texture
@@ -279,7 +278,7 @@ func _toggle_gpu_attractor(enable: bool) -> void:
 	if enable:
 		if gpu_attractor == null or not is_instance_valid(gpu_attractor):
 			_setup_gpu_attractor()
-			_update_gpu_texture() # Initial texture generation
+			_update_gpu_particles_texture() # Initial texture generation
 	else:
 		if gpu_attractor and is_instance_valid(gpu_attractor):
 			gpu_attractor.queue_free()
@@ -287,12 +286,17 @@ func _toggle_gpu_attractor(enable: bool) -> void:
 
 ## Initializes the GPUParticlesAttractorVectorField3D node and the Texture3D resource.
 func _setup_gpu_attractor():
-	# Calculate the Texture 3D resolution based on LOD export
-	var lod_size = Vector3(vector_field_size) * particles_texture_lod
+	# Metrics print.
+	if metrics_enabled:
+		print("[VectorField3D] Setting up the GPUParticlesAttractor for %s."%str(self))
+	
+	# Calculate the ImageTexture3D resolution based on LOD export
+	var lod_size := Vector3(vector_field_size) * particles_texture_lod
 	current_texture_resolution = Vector3i(lod_size.round())
 	
-	# Ensure a minimum size
+	# Ensure a minimum size (if current_texture_resolution goes to zero)
 	current_texture_resolution = current_texture_resolution.max(Vector3i(1, 1, 1))
+	
 	
 	# --- ImageTexture3D Initialization ---
 	# We must use ImageTexture3D as it provides the necessary methods to create and update the texture data at runtime.
@@ -302,20 +306,19 @@ func _setup_gpu_attractor():
 	# We create an initial array of empty images.
 	var initial_images: Array[Image] = []
 	for z in range(current_texture_resolution.z):
-		# Image.create(width, height, use_mipmaps, format)
-		var img = Image.create(current_texture_resolution.x, current_texture_resolution.y, false, Image.FORMAT_RGBAF)
-		initial_images.append(img)
+		var image_slice = Image.create(current_texture_resolution.x, current_texture_resolution.y, false, Image.FORMAT_RGBAF)
+		initial_images.append(image_slice)
 	
 	# Use the create method from ImageTexture3D
 	(vector_texture as ImageTexture3D).create(Image.FORMAT_RGBAF, current_texture_resolution.x, current_texture_resolution.y, current_texture_resolution.z, false, initial_images)
 	
 	# --- Setup of the Attractor Node ---
+	# Check if there's no instance or valid instance of the GPU particles attractor.
 	if not gpu_attractor or not is_instance_valid(gpu_attractor):
-		gpu_attractor = GPUParticlesAttractorVectorField3D.new()
-		# Use a distinctive name to prevent editor conflicts
-		gpu_attractor.name = "GPUParticlesAttractor"
-		add_child(gpu_attractor)
-		gpu_attractor.owner = self
+		gpu_attractor = GPUParticlesAttractorVectorField3D.new() # Create the attractor node.
+		gpu_attractor.name = "GPUParticlesAttractor"             # Use a distinctive name
+		add_child(gpu_attractor)                                 # Add it to the tree
+		gpu_attractor.owner = self                               # Set its owner to be self (the VectorField3D)
 	
 	# Assign the texture and size
 	gpu_attractor.texture = vector_texture
@@ -325,38 +328,37 @@ func _setup_gpu_attractor():
 	gpu_attractor.global_transform.origin = global_transform.origin
 
 ## Converts vector_data into an Array of Images for the Texture3D and updates it.
-func _update_gpu_texture() -> void:
+func _update_gpu_particles_texture() -> void:
 	if not enable_gpu_particles_integration or not gpu_attractor or not is_instance_valid(vector_texture):
 		return
-		
-	var res = current_texture_resolution
+	
+	if metrics_enabled:
+		print("[VectorField3D] Updating texture to use in GPUParticlesAttractorVectorField3D for field %s"%str(self))
+	
+	var resolution : Vector3i = current_texture_resolution
 	var images: Array[Image] = []
-	var size_x = vector_field_size.x
-	var size_y = vector_field_size.y
+	var size_x : int = vector_field_size.x
+	var size_y : int = vector_field_size.y
 	
 	# For each depth slice (Z)
-	for z in range(res.z):
+	for z in range(resolution.z):
 		# Create an image for the slice with the floating point format
-		var img = Image.create(res.x, res.y, false, Image.FORMAT_RGBAF)
+		var slice_image = Image.create(resolution.x, resolution.y, false, Image.FORMAT_RGBAF)
 		
-		for y in range(res.y):
-			for x in range(res.x):
-				
+		# For x and y
+		for y in range(resolution.y):
+			for x in range(resolution.x):
 				# --- Sample the original grid (handles LOD sampling) ---
+				
 				# Calculate the cell index in the original vector_data grid
-				var original_x = int(x * (float(vector_field_size.x) / res.x))
-				var original_y = int(y * (float(vector_field_size.y) / res.y))
-				var original_z = int(z * (float(vector_field_size.z) / res.z))
+				var original_x = int(x * (float(vector_field_size.x) / resolution.x))
+				var original_y = int(y * (float(vector_field_size.y) / resolution.y))
+				var original_z = int(z * (float(vector_field_size.z) / resolution.z))
 				
-				var index_3d = Vector3i(original_x, original_y, original_z)
+				var position3d : Vector3i = Vector3i(original_x, original_y, original_z)
 				
-				# Conversion 3D index -> 1D index
-				var index_1d = index_3d.x + index_3d.y * size_x + index_3d.z * size_x * size_y
-				
-				var vector: Vector3 = Vector3.ZERO
-				# Get the vector if the index is valid
-				if index_1d >= 0 and index_1d < vector_data.size():
-					vector = vector_data[index_1d]
+				# Use specific function to get the vector at a specfic slot
+				var vector : Vector3 = get_vector_at_cell_index(position3d)
 				
 				# --- Normalization and Mapping (Zero = 0.5) ---
 				
@@ -369,14 +371,13 @@ func _update_gpu_texture() -> void:
 				var color_b = normalized_vector.z * 0.5 + 0.5
 				
 				# Set pixel color (RGBAF stores X, Y, Z in R, G, B channels)
-				img.set_pixel(x, y, Color(color_r, color_g, color_b, 1.0))
+				slice_image.set_pixel(x, y, Color(color_r, color_g, color_b, 1.0))
 		
-		images.append(img)
+		images.append(slice_image)
 		
 	# Update the ImageTexture3D resource using the 'update' method (faster than recreating)
 	# NOTE: We cast to ImageTexture3D to ensure the method is available.
 	(vector_texture as ImageTexture3D).update(images)
-
 #endregion
 
 
@@ -501,9 +502,6 @@ func _compute_field_vectors() -> void:
 			var contribution : Vector3 = (emitter as VectorFieldBaseEmitter3D).get_vector_at_position(cell_center_global_position)
 			# Add contribution to vector_data
 			_add_to_cell(Vector3i(x,y,z),contribution)
-	
-	# NEW: Update GPU texture after full recalculation
-	_update_gpu_texture()
 
 
 ## This function gets called through get_tree().call_group(...)
@@ -597,8 +595,8 @@ func receive_emitter_update(emitter: VectorFieldBaseEmitter3D, old_info : Dictio
 		# 5. Execute optimized recalculation in the combined index box
 		_recalculate_vectors_in_box(start_index, end_index)
 	
-	# NEW: Update the GPU texture after any recalculation
-	_update_gpu_texture()
+	# NEW: Update the GPU particles texture after any recalculation
+	_update_gpu_particles_texture()
 	
 	# Update debug mesh
 	if Engine.is_editor_hint() and draw_debug_lines:
@@ -609,8 +607,7 @@ func receive_emitter_update(emitter: VectorFieldBaseEmitter3D, old_info : Dictio
 	if metrics_enabled:
 		var percentage = float(updated_cells) / total_cells * 100.0
 		print(
-			"[VF3D Metrics] | Updated Cells: %d | Total Cells: %d | Recalc %%: %.2f%%"
-			% [updated_cells, total_cells, percentage]
+			"[VF3D Metrics] | Updated Cells: %d | Total Cells: %d | Recalc %%: %.2f%%"%[updated_cells, total_cells, percentage]
 		)
 	
 	# Emit signal for user utilization

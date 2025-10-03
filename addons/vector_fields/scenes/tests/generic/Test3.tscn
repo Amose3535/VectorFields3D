@@ -1,4 +1,4 @@
-[gd_scene load_steps=26 format=3 uid="uid://b5wbbj34iv7fa"]
+[gd_scene load_steps=32 format=3 uid="uid://b5wbbj34iv7fa"]
 
 [ext_resource type="Script" uid="uid://b6crlojlnll5k" path="res://addons/vector_fields/scripts/classes/VectorFieldInteractionHandler3D.gd" id="2_p3jw8"]
 [ext_resource type="Script" uid="uid://y73g5fla2gpe" path="res://addons/vector_fields/scripts/classes/VectorField3D.gd" id="2_qg3wj"]
@@ -19,6 +19,47 @@ height = 0.5
 gravity = Vector3(0, 0, 0)
 
 [sub_resource type="SphereMesh" id="SphereMesh_sgho2"]
+
+[sub_resource type="Image" id="Image_cc2am"]
+data = {
+"data": PackedByteArray(255, 0, 255, 255, 0, 0, 0, 255, 255, 0, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 0, 255, 255, 0, 0, 0, 255, 255, 0, 255, 255, 255, 0, 255, 255, 0, 0, 0, 255, 255, 0, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 0, 255, 255, 0, 0, 0, 255, 255, 0, 255, 255),
+"format": "RGBA8",
+"height": 4,
+"mipmaps": false,
+"width": 4
+}
+
+[sub_resource type="Image" id="Image_sgho2"]
+data = {
+"data": PackedByteArray(0, 0, 0, 255, 255, 0, 255, 255, 0, 0, 0, 255, 255, 0, 255, 255, 255, 0, 255, 255, 0, 0, 0, 255, 255, 0, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 0, 255, 255, 0, 0, 0, 255, 255, 0, 255, 255, 255, 0, 255, 255, 0, 0, 0, 255, 255, 0, 255, 255, 0, 0, 0, 255),
+"format": "RGBA8",
+"height": 4,
+"mipmaps": false,
+"width": 4
+}
+
+[sub_resource type="Image" id="Image_8sbp4"]
+data = {
+"data": PackedByteArray(255, 0, 255, 255, 0, 0, 0, 255, 255, 0, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 0, 255, 255, 0, 0, 0, 255, 255, 0, 255, 255, 255, 0, 255, 255, 0, 0, 0, 255, 255, 0, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 0, 255, 255, 0, 0, 0, 255, 255, 0, 255, 255),
+"format": "RGBA8",
+"height": 4,
+"mipmaps": false,
+"width": 4
+}
+
+[sub_resource type="Image" id="Image_ufo7u"]
+data = {
+"data": PackedByteArray(0, 0, 0, 255, 255, 0, 255, 255, 0, 0, 0, 255, 255, 0, 255, 255, 255, 0, 255, 255, 0, 0, 0, 255, 255, 0, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 0, 255, 255, 0, 0, 0, 255, 255, 0, 255, 255, 255, 0, 255, 255, 0, 0, 0, 255, 255, 0, 255, 255, 0, 0, 0, 255),
+"format": "RGBA8",
+"height": 4,
+"mipmaps": false,
+"width": 4
+}
+
+[sub_resource type="ImageTexture3D" id="ImageTexture3D_81ccr"]
+_images = Array[Image]([SubResource("Image_cc2am"), SubResource("Image_sgho2"), SubResource("Image_8sbp4"), SubResource("Image_ufo7u")])
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_hq3jp"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_7uatt"]
 size = Vector3(40, 0.2, 40)
@@ -173,6 +214,14 @@ mesh = SubResource("SphereMesh_cc2am")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.85593, 0, -1.95086)
 process_material = SubResource("ParticleProcessMaterial_cc2am")
 draw_pass_1 = SubResource("SphereMesh_sgho2")
+
+[node name="GPUParticlesAttractorVectorField3D" type="GPUParticlesAttractorVectorField3D" parent="Fields"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.41489, 0.490173, -3.96445)
+size = Vector3(18.5845, 2.98035, 18.079)
+texture = SubResource("ImageTexture3D_81ccr")
+
+[node name="CPUParticles3D" type="CPUParticles3D" parent="Fields"]
+mesh = SubResource("CapsuleMesh_hq3jp")
 
 [node name="Objects" type="Node3D" parent="."]
 
