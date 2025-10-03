@@ -217,27 +217,7 @@ func get_net_vector_force_at_point(world_position: Vector3) -> Vector3:
 			print("[VectorFieldInteractionHandler] Can't get net vector force at point %s: incorrect setup"%str(world_position))
 		return Vector3.ZERO
 	
-	var net_force: Vector3 = Vector3.ZERO
-	
-	# 1. Ottiene tutti i Field
-	var all_fields: Array[Node] = get_tree().get_nodes_in_group(VectorField3D.FIELDS_GROUP)
-	
-	# 2. Cicla e Filtra
-	for field_node in all_fields:
-		if !field_node is VectorField3D:
-			continue
-		
-		var field: VectorField3D = (field_node as VectorField3D)
-		
-		# Filtro 1: Layer (Bitwise AND)
-		if (field.interaction_layer & self.interaction_layer) == 0:
-			continue
-		
-		# 3. Lookup puntuale e Somma (chiede al Field di fare il controllo AABB)
-		var field_contribution: Vector3 = field.get_vector_at_global_position(world_position)
-		
-		net_force += field_contribution
-	
+	var net_force: Vector3 = query_fields_at(world_position)
 	
 	if metrics_enabled:
 		if vector_info:
@@ -282,6 +262,30 @@ func update_forces() -> void:
 		# If the emitter itself is moving, then update it's position
 		pass
 
+## Endpoint that can be used to lookup the contribution of all compatible fields at a specific point
+func query_fields_at(pos : Vector3) -> Vector3:
+	# Get all fields
+	var all_fields: Array[Node] = get_tree().get_nodes_in_group(VectorField3D.FIELDS_GROUP)
+	var return_force : Vector3 = Vector3.ZERO
+	
+	# Cycle and filter
+	for field_node in all_fields:
+		# Filter by node type
+		if !field_node is VectorField3D:
+			continue
+		
+		# Explicit casting for methods lookup
+		var field: VectorField3D = (field_node as VectorField3D)
+		
+		# Filter by layer (Bitwise AND)
+		if (field.interaction_layer & self.interaction_layer) == 0:
+			continue
+		
+		# 3. Lookup puntuale e Somma (chiede al Field di fare il controllo AABB)
+		var field_contribution: Vector3 = field.get_vector_at_global_position(pos)
+		
+		return_force += field_contribution
+	return return_force
 
 func _update_parent() -> void:
 	var parent = get_parent()

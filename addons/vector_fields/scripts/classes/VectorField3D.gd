@@ -213,11 +213,11 @@ func _ready() -> void:
 	# Editor logic
 	if Engine.is_editor_hint():
 		_draw_debug_lines(draw_vectors_only)
+		_toggle_gpu_attractor(enable_gpu_particles_integration)
 		return
 	
 	# Runtime logic
-	if enable_gpu_particles_integration:
-		_toggle_gpu_attractor(true)
+	_toggle_gpu_attractor(enable_gpu_particles_integration)
 
 
 func _notification(what: int) -> void:
@@ -246,6 +246,7 @@ func _notification(what: int) -> void:
 			else:
 				# Notify fields of an update and update old transform variable (only when necessary: not when trying to rotate)
 				receive_emitter_update(VectorFieldBaseEmitter3D.new(),{},true) # Force a full update on move
+				_setup_gpu_attractor()
 
 # Called when the node is about to get deleted from tree
 func _exit_tree() -> void:
@@ -276,7 +277,7 @@ func _exit_tree() -> void:
 ## Toggles the creation/destruction of the GPU Attractor node.
 func _toggle_gpu_attractor(enable: bool) -> void:
 	if enable:
-		if gpu_attractor == null or not is_instance_valid(gpu_attractor):
+		if gpu_attractor == null or !is_instance_valid(gpu_attractor):
 			_setup_gpu_attractor()
 			_update_gpu_particles_texture() # Initial texture generation
 	else:
@@ -292,25 +293,20 @@ func _setup_gpu_attractor():
 	
 	# Calculate the ImageTexture3D resolution based on LOD export
 	var lod_size := Vector3(vector_field_size) * particles_texture_lod
-	current_texture_resolution = Vector3i(lod_size.round())
-	
-	# Ensure a minimum size (if current_texture_resolution goes to zero)
-	current_texture_resolution = current_texture_resolution.max(Vector3i(1, 1, 1))
+	# Create resolution from LOD_size and by stopping at 1x1x1
+	current_texture_resolution = Vector3i(lod_size.round()).max(Vector3i(1, 1, 1))
 	
 	
 	# --- ImageTexture3D Initialization ---
-	# We must use ImageTexture3D as it provides the necessary methods to create and update the texture data at runtime.
-	vector_texture = ImageTexture3D.new()
+	if vector_texture == null:
+		vector_texture = ImageTexture3D.new()
 	
-	# Initial creation of the ImageTexture3D resource with the correct size and format.
-	# We create an initial array of empty images.
-	var initial_images: Array[Image] = []
-	for z in range(current_texture_resolution.z):
-		var image_slice = Image.create(current_texture_resolution.x, current_texture_resolution.y, false, Image.FORMAT_RGBAF)
-		initial_images.append(image_slice)
+	# --- vector_texture initialization ---
+	# Instead of making an empty texture first and then editing the texture later (could introduce issues)
+	# Try to see if you can get the vector_data first, and then making an empty texture
+	if vector_data != null and vector_data != PackedVector3Array():
+		_update_gpu_particles_texture()
 	
-	# Use the create method from ImageTexture3D
-	(vector_texture as ImageTexture3D).create(Image.FORMAT_RGBAF, current_texture_resolution.x, current_texture_resolution.y, current_texture_resolution.z, false, initial_images)
 	
 	# --- Setup of the Attractor Node ---
 	# Check if there's no instance or valid instance of the GPU particles attractor.
@@ -320,12 +316,10 @@ func _setup_gpu_attractor():
 		add_child(gpu_attractor)                                 # Add it to the tree
 		gpu_attractor.owner = self                               # Set its owner to be self (the VectorField3D)
 	
-	# Assign the texture and size
-	gpu_attractor.texture = vector_texture
-	# Set the world size
-	gpu_attractor.size = world_size
-	# Attractor is centered relative to the field
-	gpu_attractor.global_transform.origin = global_transform.origin
+	gpu_attractor.texture = vector_texture                          # Assign the texture and size
+	gpu_attractor.size = world_size                                 # Set the world size
+	gpu_attractor.global_transform.origin = global_transform.origin # center attractor relative to field
+
 
 ## Converts vector_data into an Array of Images for the Texture3D and updates it.
 func _update_gpu_particles_texture() -> void:
@@ -336,24 +330,32 @@ func _update_gpu_particles_texture() -> void:
 		print("[VectorField3D] Updating texture to use in GPUParticlesAttractorVectorField3D for field %s"%str(self))
 	
 	var resolution : Vector3i = current_texture_resolution
-	var images: Array[Image] = []
 	var size_x : int = vector_field_size.x
 	var size_y : int = vector_field_size.y
 	
+	# Update vector_texture with the ImageTexture3D generated from the VectorField3D
+	vector_texture = get_image_texture_3d_from_field(resolution)
+	
+	# Reassign the ImageTexture3D to gpu attractor's texture just in case
+	gpu_attractor.texture = vector_texture
+
+
+func get_image_texture_3d_from_field(texture_resolution : Vector3i) -> ImageTexture3D:
+	var image_array: Array[Image] = []
 	# For each depth slice (Z)
-	for z in range(resolution.z):
+	for z in range(texture_resolution.z):
 		# Create an image for the slice with the floating point format
-		var slice_image = Image.create(resolution.x, resolution.y, false, Image.FORMAT_RGBAF)
+		var slice_image = Image.create(texture_resolution.x, texture_resolution.y, false, Image.FORMAT_RGBAF)
 		
 		# For x and y
-		for y in range(resolution.y):
-			for x in range(resolution.x):
+		for y in range(texture_resolution.y):
+			for x in range(texture_resolution.x):
 				# --- Sample the original grid (handles LOD sampling) ---
 				
 				# Calculate the cell index in the original vector_data grid
-				var original_x = int(x * (float(vector_field_size.x) / resolution.x))
-				var original_y = int(y * (float(vector_field_size.y) / resolution.y))
-				var original_z = int(z * (float(vector_field_size.z) / resolution.z))
+				var original_x = int(x * (float(vector_field_size.x) / texture_resolution.x))
+				var original_y = int(y * (float(vector_field_size.y) / texture_resolution.y))
+				var original_z = int(z * (float(vector_field_size.z) / texture_resolution.z))
 				
 				var position3d : Vector3i = Vector3i(original_x, original_y, original_z)
 				
@@ -373,12 +375,38 @@ func _update_gpu_particles_texture() -> void:
 				# Set pixel color (RGBAF stores X, Y, Z in R, G, B channels)
 				slice_image.set_pixel(x, y, Color(color_r, color_g, color_b, 1.0))
 		
-		images.append(slice_image)
-		
-	# Update the ImageTexture3D resource using the 'update' method (faster than recreating)
-	# NOTE: We cast to ImageTexture3D to ensure the method is available.
-	(vector_texture as ImageTexture3D).update(images)
-#endregion
+		image_array.append(slice_image)
+	
+	var new_txt : ImageTexture3D = ImageTexture3D.new()
+	var result = new_txt.create(Image.FORMAT_RGBAF, texture_resolution.x, texture_resolution.y, texture_resolution.z, false, image_array)
+	
+	if result != OK:
+		push_error("[VectorField3D] Unable to generate ImageTexture3D from vector_data.")
+		return ImageTexture3D.new()
+	else:
+		if metrics_enabled:
+			print("[VectorField3D] Successfully created ImageTexture3D: %s"%str(new_txt))
+	
+	return new_txt
+#endregion GPU Particle Functions
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ## Function used to add a value to a cell with coordinates x, y, z using my vector_data 1D array
@@ -508,6 +536,8 @@ func _compute_field_vectors() -> void:
 func receive_emitter_update(emitter: VectorFieldBaseEmitter3D, old_info : Dictionary, force : bool = false) -> void:
 	# Validity control
 	if not is_instance_valid(self) or not is_instance_valid(emitter):
+		if metrics_enabled:
+			print("[VectorField3D] Invalid field or emitter instance while receiving updates.")
 		return
 	
 	# --- Performance Metrics Setup ---
@@ -520,7 +550,6 @@ func receive_emitter_update(emitter: VectorFieldBaseEmitter3D, old_info : Dictio
 		_compute_field_vectors()
 	else:
 		# --- Optimized recalculation (LOCALIZED) ---
-		
 		# 1. Get old information (Zone A) and new information (Zone B)
 		var old_pos: Vector3 = old_info.get("global_position", emitter.global_position)
 		var old_size: Vector3 = old_info.get("world_size", emitter.world_size)
