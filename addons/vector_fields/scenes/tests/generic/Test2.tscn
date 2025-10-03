@@ -17,7 +17,7 @@ metrics_enabled = true
 metadata/_custom_type_script = "uid://y73g5fla2gpe"
 
 [node name="VectorFieldVortexEmitter3D" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.678259, -4.61217)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.56086, -0.847831)
 script = ExtResource("2_gcic0")
 max_size = Vector3(7, 7, 7)
 metadata/_custom_type_script = "uid://ryeylxce5gej"

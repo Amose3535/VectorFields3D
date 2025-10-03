@@ -1,42 +1,233 @@
-[gd_scene load_steps=7 format=3 uid="uid://b5wbbj34iv7fa"]
+[gd_scene load_steps=26 format=3 uid="uid://b5wbbj34iv7fa"]
 
-[ext_resource type="Script" uid="uid://x6yb1pv8gjby" path="res://addons/vector_fields/scripts/classes/custom_emitters/box_emitter.gd" id="1_h4dog"]
 [ext_resource type="Script" uid="uid://b6crlojlnll5k" path="res://addons/vector_fields/scripts/classes/VectorFieldInteractionHandler3D.gd" id="2_p3jw8"]
 [ext_resource type="Script" uid="uid://y73g5fla2gpe" path="res://addons/vector_fields/scripts/classes/VectorField3D.gd" id="2_qg3wj"]
+[ext_resource type="Script" uid="uid://b1y7jfjsqkfw4" path="res://addons/vector_fields/scripts/classes/custom_emitters/point_emitter.gd" id="3_cc2am"]
+[ext_resource type="Script" uid="uid://ryeylxce5gej" path="res://addons/vector_fields/scripts/classes/custom_emitters/vortex_emitter.gd" id="4_5wnh2"]
+[ext_resource type="Shader" uid="uid://dbxql5h4onca2" path="res://addons/vector_fields/assets/SkyShader.gdshader" id="4_7uatt"]
+[ext_resource type="Script" uid="uid://c12nfh3pjqln0" path="res://addons/vector_fields/scripts/classes/VectorMarker3D.gd" id="5_5wnh2"]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_onbu4"]
-albedo_color = Color(0.0784314, 0.129412, 0, 1)
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_sgho2"]
+albedo_color = Color(1, 0, 0, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_cc2am"]
+material = SubResource("StandardMaterial3D_sgho2")
+radius = 0.25
+height = 0.5
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_cc2am"]
+gravity = Vector3(0, 0, 0)
+
+[sub_resource type="SphereMesh" id="SphereMesh_sgho2"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_7uatt"]
+size = Vector3(40, 0.2, 40)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cc2am"]
+albedo_color = Color(0, 0, 0, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_sgho2"]
+material = SubResource("StandardMaterial3D_cc2am")
+size = Vector3(35, 0.2, 35)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_7uatt"]
+albedo_color = Color(0, 0, 0, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_7uatt"]
+material = SubResource("StandardMaterial3D_7uatt")
+size = Vector3(40, 0.2, 40)
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_7uatt"]
 
+[sub_resource type="Gradient" id="Gradient_cc2am"]
+offsets = PackedFloat32Array(0.49187, 0.50813)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_sgho2"]
+gradient = SubResource("Gradient_cc2am")
+fill_from = Vector2(0, 0.495726)
+fill_to = Vector2(1, 0.491453)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_8sbp4"]
+albedo_texture = SubResource("GradientTexture2D_sgho2")
+
 [sub_resource type="SphereMesh" id="SphereMesh_5wnh2"]
+material = SubResource("StandardMaterial3D_8sbp4")
+
+[sub_resource type="Gradient" id="Gradient_7uatt"]
+offsets = PackedFloat32Array(0, 0.304054, 0.614865, 1)
+colors = PackedColorArray(0, 1, 0, 1, 0.203922, 1, 1, 1, 0.615686, 0, 1, 1, 1, 0, 0, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_5wnh2"]
+gradient = SubResource("Gradient_7uatt")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_5wnh2"]
+shader = ExtResource("4_7uatt")
+shader_parameter/use_debanding = true
+shader_parameter/atmosphere_sample_count = 194
+shader_parameter/elevation = 0.0
+shader_parameter/rayleigh_strength = 1.0
+shader_parameter/mie_strength = 1.0
+shader_parameter/ozone_strength = 1.0
+shader_parameter/mie_anisotropy_factor = 0.935
+shader_parameter/atmosphere_density = 1.0
+shader_parameter/exposure = 10.0
+shader_parameter/sun_disc_feather = 0.5
+shader_parameter/sundisc_intensity = 100.0
+shader_parameter/stars_exposure = 5.0
+shader_parameter/stars_rotation = Basis(1, 0, 0, 0, 1, 0, 0, 0, 1)
+shader_parameter/dim_stars_at_day = true
+shader_parameter/moon_dist = PackedFloat32Array(6.025, 3.655, 5.315)
+shader_parameter/moon_uv_x_offset = PackedFloat32Array(0, 0, 0)
+shader_parameter/moon_textures = null
+shader_parameter/hole_in_center = false
+shader_parameter/hole_radius = 5.0
+shader_parameter/hole_feather = 10.0
+shader_parameter/cloud_falloff_coeff = 0.3
+shader_parameter/clouds_alpha_lower_bound = 0.0
+shader_parameter/clouds_alpha_upper_bound = 0.15
+shader_parameter/cloud_base_color = Color(0.85, 0.85, 0.9, 1)
+shader_parameter/cloud_overcast_color = Color(0.35, 0.4, 0.45, 1)
+shader_parameter/coverage = 0.35
+shader_parameter/cloud_smoothness = 0.05
+shader_parameter/apply_stochastic_jitter = false
+shader_parameter/stochastic_jitter_amount = 0.1
+shader_parameter/cloud_base_march_dist = 10.0
+shader_parameter/cloud_marches = 64
+shader_parameter/density_coeff = 1.0
+shader_parameter/cloud_noise_factor = 0.5
+shader_parameter/cloud_shape_size = 1.0
+shader_parameter/cloud_shape_offset = Vector3(0, 0, 0)
+shader_parameter/cloud_noise_size = 1.0
+shader_parameter/cloud_noise_offset = Vector3(0, 0, 0)
+shader_parameter/clouds_anisotropy_factor = 0.25
+shader_parameter/light_marches = 8
+shader_parameter/light_max_dist = 5.0
+shader_parameter/light_strength = 15.0
+shader_parameter/use_cirrus = true
+shader_parameter/cirrus_squish = Vector2(4, 1)
+shader_parameter/cirrus_scale = 1.0
+shader_parameter/cirrus_treshold = 0.75
+shader_parameter/cirrus_feather = 0.25
+shader_parameter/cirrus_offset = Vector2(0, 0)
+shader_parameter/cirrus_distortion_scale = 1.0
+shader_parameter/cirrus_distortion_strength = 0.4
+shader_parameter/cirrus_distortion_offset = Vector2(0, 0)
+shader_parameter/cirrus_mask_scale = 1.0
+shader_parameter/cirrus_mask_treshold = 0.6
+shader_parameter/cirrus_mask_feather = 0.4
+shader_parameter/cirrus_opacity = 0.2
+shader_parameter/use_rainbow = false
+shader_parameter/behind_clouds = false
+shader_parameter/rainbow_gradient = SubResource("GradientTexture1D_5wnh2")
+shader_parameter/rainbow_width = 0.05
+shader_parameter/rainbow_offset = 0.65
+shader_parameter/rainbow_opacity = 1.0
+shader_parameter/double_rainbow = true
+
+[sub_resource type="Sky" id="Sky_qg3wj"]
+sky_material = SubResource("ShaderMaterial_5wnh2")
+
+[sub_resource type="Environment" id="Environment_7uatt"]
+background_mode = 2
+sky = SubResource("Sky_qg3wj")
 
 [node name="Test3" type="Node3D"]
 
-[node name="Floor" type="CSGBox3D" parent="."]
-size = Vector3(20, 0.2, 20)
-material = SubResource("StandardMaterial3D_onbu4")
+[node name="Fields" type="Node3D" parent="."]
 
-[node name="VectorFieldBoxEmitter3D" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.71093, -3.85184)
-script = ExtResource("1_h4dog")
-metadata/_custom_type_script = "uid://x6yb1pv8gjby"
-
-[node name="VectorField3D" type="Node3D" parent="."]
+[node name="VectorField1" type="Node3D" parent="Fields"]
 script = ExtResource("2_qg3wj")
-LOD = 2.0
-vector_field_size = Vector3i(20, 20, 20)
+LOD = 1.5
+vector_field_size = Vector3i(50, 50, 50)
+enable_gpu_particles_integration = true
+draw_debug_lines = false
 metadata/_custom_type_script = "uid://y73g5fla2gpe"
 
-[node name="RigidBody3D" type="RigidBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
+[node name="VortexEmitter" type="Node3D" parent="Fields"]
+script = ExtResource("4_5wnh2")
+vortex_strength = 3.0
+max_size = Vector3(33.333, 33.333, 33.333)
+metadata/_custom_type_script = "uid://ryeylxce5gej"
 
-[node name="VectorFieldInteractionHandler" type="Node" parent="RigidBody3D"]
+[node name="VectorField2" type="Node3D" parent="Fields"]
+script = ExtResource("2_qg3wj")
+LOD = 1.5
+vector_field_size = Vector3i(50, 50, 50)
+interaction_layer = 2
+draw_debug_lines = false
+vector_color = Color(0, 1, 0, 1)
+metadata/_custom_type_script = "uid://y73g5fla2gpe"
+
+[node name="PointEmitter" type="Node3D" parent="Fields"]
+script = ExtResource("3_cc2am")
+power = -6.0
+inverse_square_decay = false
+interaction_layer = 2
+max_size = Vector3(33.333, 33.333, 33.333)
+metadata/_custom_type_script = "uid://b1y7jfjsqkfw4"
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Fields"]
+mesh = SubResource("SphereMesh_cc2am")
+
+[node name="GPUParticles3D" type="GPUParticles3D" parent="Fields"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.85593, 0, -1.95086)
+process_material = SubResource("ParticleProcessMaterial_cc2am")
+draw_pass_1 = SubResource("SphereMesh_sgho2")
+
+[node name="Objects" type="Node3D" parent="."]
+
+[node name="Floor" type="StaticBody3D" parent="Objects"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -17.4, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Objects/Floor"]
+shape = SubResource("BoxShape3D_7uatt")
+debug_color = Color(0, 0.6, 0.701961, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Objects/Floor"]
+mesh = SubResource("BoxMesh_sgho2")
+
+[node name="wall" type="StaticBody3D" parent="Objects"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0, -16.8)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Objects/wall"]
+shape = SubResource("BoxShape3D_7uatt")
+debug_color = Color(0, 0.6, 0.701961, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Objects/wall"]
+mesh = SubResource("BoxMesh_7uatt")
+
+[node name="Ball" type="RigidBody3D" parent="Objects"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.63842, 5.2687)
+gravity_scale = 0.0
+angular_velocity = Vector3(0, 1.74533, 0)
+angular_damp_mode = 1
+
+[node name="VectorFieldInteractionHandler" type="Node" parent="Objects/Ball"]
 script = ExtResource("2_p3jw8")
+interaction_layer = 3
+tick_updates = true
+vector_info = true
 metadata/_custom_type_script = "uid://b6crlojlnll5k"
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="RigidBody3D"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Objects/Ball"]
 shape = SubResource("SphereShape3D_7uatt")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="RigidBody3D"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Objects/Ball"]
 mesh = SubResource("SphereMesh_5wnh2")
+
+[node name="VectorDebugger3D" type="Marker3D" parent="Objects/Ball"]
+script = ExtResource("5_5wnh2")
+metadata/_custom_type_script = "uid://c12nfh3pjqln0"
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 22.519, 0)
+size = 13.2879
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_7uatt")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="WorldEnvironment"]
+transform = Transform3D(1, 0, 0, 0, 0.573576, 0.819152, 0, -0.819152, 0.573576, 0, 0, 0)
+shadow_enabled = true
+shadow_bias = 0.04
+directional_shadow_mode = 0

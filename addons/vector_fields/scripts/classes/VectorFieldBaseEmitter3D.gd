@@ -67,13 +67,12 @@ func _ready() -> void:
 	if !is_in_group(EMITTER_GROUP):
 		self.add_to_group(EMITTER_GROUP)
 	
-	_clear_debug_mesh()                   # Clear all possible debug meshes
-	_instantiate_debug_mesh()             # Instantiate a new debug mesh
-	_recalculate_parameters(max_size)     # Recalculate parameters using max_size
-	_draw_debug_lines()                   # Draw initial state of VectorField3D
-	
+	_clear_debug_mesh()                                               # Clear all possible debug meshes
+	_instantiate_debug_mesh()                                         # Instantiate a new debug mesh
+	_recalculate_parameters(max_size)                                 # Recalculate parameters using max_size
+	notify_fields_of_update(self.global_position, self.world_size)    # After everything has been done, notify fields of update (node is ready)
 	if Engine.is_editor_hint():
-		# Editor logic here
+		_draw_debug_lines()                                               # Draw initial state of VectorField3D
 		return
 	
 	# Runtime logic here
@@ -194,6 +193,7 @@ func _instantiate_debug_mesh() -> void:
 	var new_material = StandardMaterial3D.new()
 	new_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	new_material.vertex_color_use_as_albedo = true
+	new_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	debug_mesh.material_override = new_material
 
 

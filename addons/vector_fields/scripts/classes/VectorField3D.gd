@@ -1,4 +1,3 @@
-# VectorField3D.gd
 @tool
 @icon("res://addons/vector_fields/assets/images/VectorField3DIcon/VectorField3DIcon.svg")
 extends Node3D
@@ -37,6 +36,7 @@ signal vf3d_updated(vf3d : VectorField3D)
 		LOD = new_lod
 		_recalculate_parameters(new_lod, vector_field_size)
 		_compute_field_vectors()
+		_update_gpu_texture() # NEW: Update GPU texture when resolution changes
 		emit_signal(&"vf3d_updated",new_lod)
 		if Engine.is_editor_hint():
 			_redraw_mesh(draw_debug_lines,draw_vectors_only)
@@ -53,6 +53,7 @@ signal vf3d_updated(vf3d : VectorField3D)
 		# AFTER validating the new_field_size, set every internal variable
 		_recalculate_parameters(LOD, new_field_size)
 		_compute_field_vectors()
+		_update_gpu_texture() # NEW: Update GPU texture when resolution changes
 		emit_signal(&"vf3d_updated",new_field_size)
 		if Engine.is_editor_hint():
 			_redraw_mesh(draw_debug_lines,draw_vectors_only)
@@ -66,16 +67,37 @@ signal vf3d_updated(vf3d : VectorField3D)
 ## InteractionLayer is the layer that defines the interaction between emitters and fields. Only emitters on the same laer as another field will be able to affect its vectors. 
 @export_flags_3d_physics var interaction_layer = 1
 
+@export_group("Particles")
+## Toggle to enable integration with GPU-based particle systems (requires GPUParticlesAttractorVectorField3D).
+@export var enable_gpu_particles_integration: bool = false:
+	set(value):
+		enable_gpu_particles_integration = value
+		if is_inside_tree():
+			_toggle_gpu_attractor(value)
+
+## Factor to reduce the resolution of the Texture3D compared to vector_field_size.
+## 1.0 = Full resolution. Lower values reduce VRAM usage for particles.
+@export_range(0.1, 1.0, 0.05) var particles_texture_lod: float = 1.0:
+	set(value):
+		particles_texture_lod = value
+		# Re-setup if active to apply new resolution
+		if enable_gpu_particles_integration and is_inside_tree():
+			_setup_gpu_attractor()
+
+## A constant used to normalize vectors into the [0, 1] color range.
+## Vector = 0 is mapped to 0.5. Vector = MAX_FORCE_VALUE is mapped to 1.0.
+@export var gpu_max_force_value: float = 10.0
+
 
 
 @export_group("Optimization")
 ## Extra padding, in *cells*, added to the emitter's calculated update zone (combined AABB).[br]
 ## to clean up potential lag/ghosting vectors left behind during stutters.
-@export_range(0, 10, 1) var update_zone_padding_cells: int = 1 
+@export_range(0, 10, 1) var update_zone_padding_cells: int = 1
 ## The factor used to convert the distance traveled by the emitter
 ## since the last update into extra cell padding.[br]
 ## 1.0 means 1 meter of movement results in 1 meter of cleaning safety margin.
-@export var movement_padding_factor: float = 1.0 
+@export var movement_padding_factor: float = 1.0
 ## Controls how fast the dynamic padding can grow between frames (0.0 = instant, 1.0 = no growth allowed).
 ## A value around 0.2-0.5 is usually good to smooth out lag spikes.
 @export_range(0.0, 1.0, 0.05) var dynamic_smoothing_factor: float = 0.4
@@ -150,6 +172,11 @@ var world_size : Vector3 = Vector3(vector_field_size)*cube_edge
 var debug_mesh : MeshInstance3D = MeshInstance3D.new()
 ## The last frame's cell padding
 var last_dynamic_padding_cells: int = 0
+
+# NEW: GPU Attractor Internals
+var gpu_attractor: GPUParticlesAttractorVectorField3D = null
+var vector_texture: ImageTexture3D = null
+var current_texture_resolution: Vector3i = Vector3i.ZERO # To track the actual resolution used by the texture
 #endregion
 
 
@@ -183,21 +210,21 @@ func _ready() -> void:
 	
 	
 	_compute_field_vectors()
-	_draw_debug_lines(draw_vectors_only)
 	
 	# Editor logic
 	if Engine.is_editor_hint():
-		# Insert "editor only" logic here
+		_draw_debug_lines(draw_vectors_only)
 		return
 	
 	# Runtime logic
-	# Insert "runtime-only" logic here
+	if enable_gpu_particles_integration:
+		_toggle_gpu_attractor(true)
 
 
 func _notification(what: int) -> void:
 	if !is_inside_tree():
 		return
-
+	
 	match what:
 		NOTIFICATION_TRANSFORM_CHANGED:
 			var reset_rot_or_scale : bool = false
@@ -219,11 +246,14 @@ func _notification(what: int) -> void:
 			# Otherwise...
 			else:
 				# Notify fields of an update and update old transform variable (only when necessary: not when trying to rotate)
-				receive_emitter_update(VectorFieldBaseEmitter3D.new(),{},true)
+				receive_emitter_update(VectorFieldBaseEmitter3D.new(),{},true) # Force a full update on move
 
 # Called when the node is about to get deleted from tree
 func _exit_tree() -> void:
 	emit_signal(&"vf3d_exited_group",self)
+	# Clean up attractor on exit
+	if gpu_attractor and is_instance_valid(gpu_attractor):
+		gpu_attractor.queue_free()
 
 
 
@@ -242,11 +272,119 @@ func _exit_tree() -> void:
 
 #region INTERNAL FUNCTIONS
 
+#region GPU Particle Functions
+
+## Toggles the creation/destruction of the GPU Attractor node.
+func _toggle_gpu_attractor(enable: bool) -> void:
+	if enable:
+		if gpu_attractor == null or not is_instance_valid(gpu_attractor):
+			_setup_gpu_attractor()
+			_update_gpu_texture() # Initial texture generation
+	else:
+		if gpu_attractor and is_instance_valid(gpu_attractor):
+			gpu_attractor.queue_free()
+			gpu_attractor = null
+
+## Initializes the GPUParticlesAttractorVectorField3D node and the Texture3D resource.
+func _setup_gpu_attractor():
+	# Calculate the Texture 3D resolution based on LOD export
+	var lod_size = Vector3(vector_field_size) * particles_texture_lod
+	current_texture_resolution = Vector3i(lod_size.round())
+	
+	# Ensure a minimum size
+	current_texture_resolution = current_texture_resolution.max(Vector3i(1, 1, 1))
+	
+	# --- ImageTexture3D Initialization ---
+	# We must use ImageTexture3D as it provides the necessary methods to create and update the texture data at runtime.
+	vector_texture = ImageTexture3D.new()
+	
+	# Initial creation of the ImageTexture3D resource with the correct size and format.
+	# We create an initial array of empty images.
+	var initial_images: Array[Image] = []
+	for z in range(current_texture_resolution.z):
+		# Image.create(width, height, use_mipmaps, format)
+		var img = Image.create(current_texture_resolution.x, current_texture_resolution.y, false, Image.FORMAT_RGBAF)
+		initial_images.append(img)
+	
+	# Use the create method from ImageTexture3D
+	(vector_texture as ImageTexture3D).create(Image.FORMAT_RGBAF, current_texture_resolution.x, current_texture_resolution.y, current_texture_resolution.z, false, initial_images)
+	
+	# --- Setup of the Attractor Node ---
+	if not gpu_attractor or not is_instance_valid(gpu_attractor):
+		gpu_attractor = GPUParticlesAttractorVectorField3D.new()
+		# Use a distinctive name to prevent editor conflicts
+		gpu_attractor.name = "GPUParticlesAttractor"
+		add_child(gpu_attractor)
+		gpu_attractor.owner = self
+	
+	# Assign the texture and size
+	gpu_attractor.texture = vector_texture
+	# Set the world size
+	gpu_attractor.size = world_size
+	# Attractor is centered relative to the field
+	gpu_attractor.global_transform.origin = global_transform.origin
+
+## Converts vector_data into an Array of Images for the Texture3D and updates it.
+func _update_gpu_texture() -> void:
+	if not enable_gpu_particles_integration or not gpu_attractor or not is_instance_valid(vector_texture):
+		return
+		
+	var res = current_texture_resolution
+	var images: Array[Image] = []
+	var size_x = vector_field_size.x
+	var size_y = vector_field_size.y
+	
+	# For each depth slice (Z)
+	for z in range(res.z):
+		# Create an image for the slice with the floating point format
+		var img = Image.create(res.x, res.y, false, Image.FORMAT_RGBAF)
+		
+		for y in range(res.y):
+			for x in range(res.x):
+				
+				# --- Sample the original grid (handles LOD sampling) ---
+				# Calculate the cell index in the original vector_data grid
+				var original_x = int(x * (float(vector_field_size.x) / res.x))
+				var original_y = int(y * (float(vector_field_size.y) / res.y))
+				var original_z = int(z * (float(vector_field_size.z) / res.z))
+				
+				var index_3d = Vector3i(original_x, original_y, original_z)
+				
+				# Conversion 3D index -> 1D index
+				var index_1d = index_3d.x + index_3d.y * size_x + index_3d.z * size_x * size_y
+				
+				var vector: Vector3 = Vector3.ZERO
+				# Get the vector if the index is valid
+				if index_1d >= 0 and index_1d < vector_data.size():
+					vector = vector_data[index_1d]
+				
+				# --- Normalization and Mapping (Zero = 0.5) ---
+				
+				# 1. Normalize: Map the vector onto a range [-1, 1] relative to MAX_FORCE_VALUE
+				var normalized_vector = vector / gpu_max_force_value
+				
+				# 2. Shift: Map [-1, 1] onto [0, 1] (color range)
+				var color_r = normalized_vector.x * 0.5 + 0.5
+				var color_g = normalized_vector.y * 0.5 + 0.5
+				var color_b = normalized_vector.z * 0.5 + 0.5
+				
+				# Set pixel color (RGBAF stores X, Y, Z in R, G, B channels)
+				img.set_pixel(x, y, Color(color_r, color_g, color_b, 1.0))
+		
+		images.append(img)
+		
+	# Update the ImageTexture3D resource using the 'update' method (faster than recreating)
+	# NOTE: We cast to ImageTexture3D to ensure the method is available.
+	(vector_texture as ImageTexture3D).update(images)
+
+#endregion
 
 
 ## Function used to add a value to a cell with coordinates x, y, z using my vector_data 1D array
 func _add_to_cell(pos : Vector3i, value : Vector3) -> void:
 	if !is_inside_tree():
+		return
+	if pos.x < 0 || pos.y < 0 || pos.z < 0:
 		return
 	if pos.x < vector_field_size.x && pos.y < vector_field_size.y && pos.z < vector_field_size.z:
 		vector_data[pos.x+(pos.y*vector_field_size.x)+(pos.z*vector_field_size.x*vector_field_size.y)] += value
@@ -255,12 +393,16 @@ func _add_to_cell(pos : Vector3i, value : Vector3) -> void:
 func _set_cell(pos : Vector3i, value : Vector3) -> void:
 	if !is_inside_tree():
 		return
+	if pos.x < 0 || pos.y < 0 || pos.z < 0:
+		return
 	if pos.x < vector_field_size.x && pos.y < vector_field_size.y && pos.z < vector_field_size.z:
 		vector_data[pos.x+(pos.y*vector_field_size.x)+(pos.z*vector_field_size.x*vector_field_size.y)] = value
 
 ## Function used to get the data inside a cell with coordinates x, y, z using my vector_data 1D array
 func _get_cell(pos: Vector3i) -> Vector3:
 	if !is_inside_tree():
+		return Vector3.ZERO
+	if pos.x < 0 || pos.y < 0 || pos.z < 0:
 		return Vector3.ZERO
 	if pos.x < vector_field_size.x && pos.y < vector_field_size.y && pos.z < vector_field_size.z:
 		return vector_data[pos.x+(pos.y*vector_field_size.x)+(pos.z*vector_field_size.x*vector_field_size.y)]
@@ -278,11 +420,14 @@ func get_cell_index_from_local_pos(local_pos: Vector3) -> Vector3i:
 	)
 
 func get_vector_at_cell_index(index: Vector3i) -> Vector3:
+	if index.x < 0 || index.y < 0 || index.z < 0:
+		return Vector3.ZERO
+	
 	var x: int = clamp(index.x, 0, vector_field_size.x - 1)
 	var y: int = clamp(index.y, 0, vector_field_size.y - 1)
 	var z: int = clamp(index.z, 0, vector_field_size.z - 1)
 	
-	# Usiamo la funzione interna _get_cell per la lookup effettiva
+	# Use internal function _get_cell for lookup
 	return _get_cell(Vector3i(x,y,z))
 
 
@@ -304,16 +449,6 @@ func _initialize_vector_data(_vector_field_size : Vector3i = vector_field_size):
 	
 	# Initialize vector_data
 	vector_data.resize(cached_size.x*cached_size.y*cached_size.z)
-	
-	# NOTE: OLD vector_Data initialization
-	#for x in cached_size.x:
-		#vector_data[x] = []
-		#vector_data[x].resize(cached_size.y) # Y-dimension
-		#for y in cached_size.y:
-			#vector_data[x][y] = []
-			#vector_data[x][y].resize(cached_size.z) # Z-dimension
-			#for z in cached_size.z:
-				#vector_data[x][y][z] = Vector3.ZERO
 	
 
 ## The function responsible for computing the contribution of each compatible emitter to the vector grid.
@@ -366,6 +501,10 @@ func _compute_field_vectors() -> void:
 			var contribution : Vector3 = (emitter as VectorFieldBaseEmitter3D).get_vector_at_position(cell_center_global_position)
 			# Add contribution to vector_data
 			_add_to_cell(Vector3i(x,y,z),contribution)
+	
+	# NEW: Update GPU texture after full recalculation
+	_update_gpu_texture()
+
 
 ## This function gets called through get_tree().call_group(...)
 func receive_emitter_update(emitter: VectorFieldBaseEmitter3D, old_info : Dictionary, force : bool = false) -> void:
@@ -412,8 +551,8 @@ func receive_emitter_update(emitter: VectorFieldBaseEmitter3D, old_info : Dictio
 		if target_dynamic_padding > last_dynamic_padding_cells:
 			# If required padding increased (due to lag spike), limit the growth using Lerp.
 			var smoothed_float = lerp(
-				float(last_dynamic_padding_cells), 
-				float(target_dynamic_padding), 
+				float(last_dynamic_padding_cells),
+				float(target_dynamic_padding),
 				1.0 - dynamic_smoothing_factor # 1.0 - factor gives the speed of change (by default it would evaluate to 0.6)
 			)
 			# Round up to ensure we cover the area
@@ -450,7 +589,7 @@ func receive_emitter_update(emitter: VectorFieldBaseEmitter3D, old_info : Dictio
 		var end_index = Vector3i(end_x, end_y, end_z)
 		
 		# ----------------------------------------------------------------------
-		#  PERFORMANCE METRICS CALCULATION
+		#  PERFORMANCE METRICS CALCULATION
 		# ----------------------------------------------------------------------
 		# Calculate the number of cells in the updated region (end is exclusive)
 		updated_cells = (end_x - start_x) * (end_y - start_y) * (end_z - start_z)
@@ -458,16 +597,19 @@ func receive_emitter_update(emitter: VectorFieldBaseEmitter3D, old_info : Dictio
 		# 5. Execute optimized recalculation in the combined index box
 		_recalculate_vectors_in_box(start_index, end_index)
 	
+	# NEW: Update the GPU texture after any recalculation
+	_update_gpu_texture()
+	
 	# Update debug mesh
 	if Engine.is_editor_hint() and draw_debug_lines:
 		# This should ideally be replaced by a throttled update or partial mesh update
 		_redraw_mesh(draw_debug_lines, draw_vectors_only)
 	
-	# ---  FINAL PERFORMANCE PRINT ---
-	if metrics_enabled: 
+	# ---  FINAL PERFORMANCE PRINT ---
+	if metrics_enabled:
 		var percentage = float(updated_cells) / total_cells * 100.0
 		print(
-			"[VF3D Metrics] | Updated Cells: %d | Total Cells: %d | Recalc %%: %.2f%%" 
+			"[VF3D Metrics] | Updated Cells: %d | Total Cells: %d | Recalc %%: %.2f%%"
 			% [updated_cells, total_cells, percentage]
 		)
 	
@@ -489,7 +631,7 @@ func _recalculate_vectors_in_box(start: Vector3i, end: Vector3i) -> void:
 	var cube_edge_local = cube_edge
 	var cube_edge_half = cube_edge_local / 2.0
 	# The local origin (corner -half_world_size) used for coordinate mapping
-	var field_origin_local = -world_size / 2.0 
+	var field_origin_local = -world_size / 2.0
 	
 	# 2. Pre-filter Emitters (Optimization: Check intersection only once)
 	var all_emitters = get_tree().get_nodes_in_group(VectorFieldBaseEmitter3D.EMITTER_GROUP)
@@ -623,6 +765,7 @@ func _instantiate_debug_mesh() -> void:
 	# Create the material for the Mesh
 	var new_material = StandardMaterial3D.new()
 	new_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	new_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	new_material.vertex_color_use_as_albedo = true
 	debug_mesh.material_override = new_material
 
