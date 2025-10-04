@@ -1,6 +1,6 @@
 @tool
 extends VectorFieldBaseEmitter3D
-class_name VectorFieldPointEmitter3D
+class_name PointEmitter3D
 ## Emitter that creates a force field centered at its position, with force decaying
 ## based on distance (inverse square law or linear).
 

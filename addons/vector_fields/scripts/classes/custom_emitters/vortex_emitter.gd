@@ -1,6 +1,6 @@
 @tool
 extends VectorFieldBaseEmitter3D
-class_name VectorFieldVortexEmitter3D
+class_name VortexEmitter3D
 ## Emitter that generates a vortex (swirling) force field around its center.
 
 #region EXPORTS

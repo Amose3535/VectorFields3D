@@ -1,7 +1,7 @@
 # VectorFieldBoxEmitter3D.gd
 @tool
 extends VectorFieldBaseEmitter3D
-class_name VectorFieldBoxEmitter3D
+class_name BoxEmitter3D
 ## Emitter that applies a constant target vector to all points falling within its AABB defined by world_size.
 
 #region EXPORTS

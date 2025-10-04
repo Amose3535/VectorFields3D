@@ -36,7 +36,8 @@ signal vf3d_updated(vf3d : VectorField3D)
 		LOD = new_lod
 		_recalculate_parameters(new_lod, vector_field_size)
 		_compute_field_vectors()
-		_update_gpu_particles_texture() # NEW: Update GPU texture when resolution changes
+		if enable_gpu_particles_integration:
+			_update_gpu_particles_texture() # Update GPU texture when resolution changes ONLY when necessary
 		emit_signal(&"vf3d_updated",new_lod)
 		if Engine.is_editor_hint():
 			_redraw_mesh(draw_debug_lines,draw_vectors_only)
@@ -53,8 +54,9 @@ signal vf3d_updated(vf3d : VectorField3D)
 		# AFTER validating the new_field_size, set every internal variable
 		_recalculate_parameters(LOD, new_field_size)
 		_compute_field_vectors()
-		_update_gpu_particles_texture() # NEW: Update GPU texture when resolution changes
-		emit_signal(&"vf3d_updated",new_field_size)
+		if enable_gpu_particles_integration:
+			_update_gpu_particles_texture() # Update GPU texture when resolution changes ONLY when necessary
+		emit_signal(&"vf3d_updated",self)
 		if Engine.is_editor_hint():
 			_redraw_mesh(draw_debug_lines,draw_vectors_only)
 
@@ -62,10 +64,13 @@ signal vf3d_updated(vf3d : VectorField3D)
 @export var active : bool = true:
 	set(new_activity):
 		active = new_activity
-		emit_signal(&"vf3d_updated",new_activity)
+		emit_signal(&"vf3d_updated",self)
 
 ## InteractionLayer is the layer that defines the interaction between emitters and fields. Only emitters on the same laer as another field will be able to affect its vectors. 
-@export_flags_3d_physics var interaction_layer = 1
+@export_flags_3d_physics var interaction_layer = 1:
+	set(new_layer):
+		interaction_layer = new_layer
+		
 
 @export_group("Particles")
 ## Toggle to enable integration with GPU-based particle systems (requires GPUParticlesAttractorVectorField3D).
@@ -624,7 +629,7 @@ func receive_emitter_update(emitter: VectorFieldBaseEmitter3D, old_info : Dictio
 		# 5. Execute optimized recalculation in the combined index box
 		_recalculate_vectors_in_box(start_index, end_index)
 	
-	# NEW: Update the GPU particles texture after any recalculation
+	# Update the GPU particles texture after any recalculation
 	_update_gpu_particles_texture()
 	
 	# Update debug mesh
