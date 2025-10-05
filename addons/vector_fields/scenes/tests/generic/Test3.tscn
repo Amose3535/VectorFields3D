@@ -144,6 +144,7 @@ sky = SubResource("Sky_qg3wj")
 [node name="VectorField" type="Node3D" parent="Fields"]
 script = ExtResource("2_qg3wj")
 vector_field_size = Vector3i(50, 50, 50)
+interaction_layer = 2147483648
 enable_gpu_particles_integration = true
 draw_debug_lines = false
 vector_color = Color(0, 1, 0, 1)
@@ -152,6 +153,7 @@ metadata/_custom_type_script = "uid://y73g5fla2gpe"
 [node name="PointEmitter" type="Node3D" parent="Fields"]
 script = ExtResource("3_cc2am")
 power = -1000.0
+interaction_layer = 2147483648
 max_size = Vector3(33.333, 33.333, 33.333)
 min_magnitude = 0.121
 metadata/_custom_type_script = "uid://b1y7jfjsqkfw4"
@@ -165,12 +167,6 @@ emitting = false
 lifetime = 10.0
 process_material = SubResource("ParticleProcessMaterial_cc2am")
 draw_pass_1 = SubResource("SphereMesh_sgho2")
-
-[node name="VectorDebugger3D" type="Marker3D" parent="Fields"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 22, 22)
-visible = false
-script = ExtResource("5_5wnh2")
-metadata/_custom_type_script = "uid://c12nfh3pjqln0"
 
 [node name="Objects" type="Node3D" parent="."]
 

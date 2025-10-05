@@ -67,11 +67,6 @@ func _ready() -> void:
 	if !is_in_group(EMITTER_GROUP):
 		self.add_to_group(EMITTER_GROUP)
 	
-	# Connect tree exited signal to _on_tree_Exited
-	if !tree_exited.is_connected(Callable(_on_tree_exited)):
-		tree_exited.connect(Callable(_on_tree_exited))
-	
-	
 	_clear_debug_mesh()                                               # Clear all possible debug meshes
 	_instantiate_debug_mesh()                                         # Instantiate a new debug mesh
 	_recalculate_parameters(max_size)                                 # Recalculate parameters using max_size
@@ -111,13 +106,21 @@ func _notification(what: int) -> void:
 func _enter_tree() -> void:
 	if !is_inside_tree():
 		return
-	notify_fields_of_update(self.global_position, self.world_size)
+	
+	if !is_in_group(EMITTER_GROUP):
+		add_to_group(EMITTER_GROUP)
+	
+	notify_fields_of_update(old_position, old_size)
 
-func _on_tree_exited() -> void:
+func _exit_tree() -> void:
 	#print("Exited tree") # OK! ( check )
 	if !is_inside_tree():
 		return
-	notify_fields_of_update(Vector3(), Vector3(), true)
+	
+	if is_in_group(EMITTER_GROUP):
+		remove_from_group(EMITTER_GROUP)
+	
+	notify_fields_of_update(old_position, old_size, true)
 
 
 #region INTERNAL FUNCTIONS
