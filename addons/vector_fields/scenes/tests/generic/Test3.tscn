@@ -163,7 +163,6 @@ mesh = SubResource("SphereMesh_cc2am")
 
 [node name="GPUParticles3D" type="GPUParticles3D" parent="Fields"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.85052, -1.60774, 3.16833)
-emitting = false
 lifetime = 10.0
 process_material = SubResource("ParticleProcessMaterial_cc2am")
 draw_pass_1 = SubResource("SphereMesh_sgho2")
